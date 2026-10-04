@@ -72,12 +72,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-72 flex flex-col glass-shell transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 flex flex-col glass-shell transition-transform duration-300 lg:translate-x-0 ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo & Brand Header */}
-        <div className="p-4 flex items-center justify-between border-b border-white/10">
+        <div className="px-4 py-3.5 flex items-center justify-between border-b border-white/8">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <Sparkles className="w-5 h-5 text-white animate-pulse" />
@@ -111,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Navigation list */}
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
+        <nav className="flex-1 min-h-0 px-2.5 py-2 space-y-1 overflow-y-auto overscroll-contain">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
