@@ -17,6 +17,7 @@ import { ServerConfig } from './src/server/config';
 import { OAuth2Client } from 'google-auth-library';
 import { Database, User } from './src/server/db';
 import { ModelRouter, GeminiAdapter, ProviderError } from './src/server/providers';
+import type { ModelInfo } from './src/types';
 
 dotenv.config();
 
