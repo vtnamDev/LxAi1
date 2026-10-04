@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "NODE_ENV=production tsx server.ts",
-    "build": "vite build",
+    "build": "npm run build:server && vite build",
+    "build:server": "esbuild server.ts --bundle --format=esm --platform=node --target=node22 --outfile=dist-server/server.mjs --packages=external",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist server.js dist-server",
     "lint": "tsc --noEmit",
     "test": "tsx src/tests/suite.ts",
     "package": "tsx scripts/create-deploy-zip.ts",
