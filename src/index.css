@@ -3,55 +3,55 @@
 @layer base {
   :root {
     color-scheme: dark;
-    --bg-base: #07090d;
-    --text-primary: #f4f7fb;
-    --text-secondary: #a3adbb;
-    --text-muted: #66717f;
+    --bg-base: #08090b;
+    --text-primary: #f8fafc;
+    --text-secondary: #a9b1bc;
+    --text-muted: #6b7280;
 
-    --glass-shell-bg: rgba(10, 13, 18, 0.74);
-    --glass-shell-blur: 18px;
-    --glass-shell-border: rgba(255,255,255,.075);
-    --glass-card-bg: rgba(15, 19, 26, 0.66);
-    --glass-card-blur: 14px;
-    --glass-card-border: rgba(255,255,255,.065);
-    --glass-elevated-bg: rgba(20, 25, 33, 0.84);
-    --glass-elevated-blur: 18px;
-    --glass-elevated-border: rgba(255,255,255,.10);
-    --glass-modal-bg: rgba(8, 11, 16, .93);
-    --glass-modal-blur: 24px;
-    --glass-modal-border: rgba(255,255,255,.11);
+    --glass-shell-bg: rgba(9, 11, 14, 0.94);
+    --glass-shell-blur: 10px;
+    --glass-shell-border: rgba(255,255,255,.09);
+    --glass-card-bg: rgba(15, 18, 23, 0.9);
+    --glass-card-blur: 8px;
+    --glass-card-border: rgba(255,255,255,.08);
+    --glass-elevated-bg: rgba(17, 20, 26, 0.96);
+    --glass-elevated-blur: 10px;
+    --glass-elevated-border: rgba(255,255,255,.12);
+    --glass-modal-bg: rgba(10, 12, 16, .98);
+    --glass-modal-blur: 14px;
+    --glass-modal-border: rgba(255,255,255,.13);
 
-    --aurora-a: rgba(104,132,255,.12);
-    --aurora-b: rgba(71,219,193,.08);
-    --aurora-c: rgba(201,111,255,.065);
+    --aurora-a: rgba(89,135,255,.045);
+    --aurora-b: rgba(62,211,166,.03);
+    --aurora-c: rgba(175,118,255,.02);
     --shadow-xl: 0 24px 90px rgba(0,0,0,.42);
     --glass-pointer-x: 50%;
     --glass-pointer-y: 18%;
   }
 
   [data-tier="full"] {
-    --glass-shell-blur: 24px;
-    --glass-card-blur: 18px;
-    --glass-elevated-blur: 22px;
-    --glass-modal-blur: 28px;
-  }
-
-  [data-tier="balanced"] {
-    --glass-shell-blur: 14px;
-    --glass-card-blur: 10px;
-    --glass-elevated-blur: 14px;
+    --glass-shell-blur: 16px;
+    --glass-card-blur: 12px;
+    --glass-elevated-blur: 16px;
     --glass-modal-blur: 20px;
   }
 
+  [data-tier="balanced"] {
+    --glass-shell-blur: 8px;
+    --glass-card-blur: 6px;
+    --glass-elevated-blur: 10px;
+    --glass-modal-blur: 14px;
+  }
+
   [data-tier="lite"] {
-    --glass-shell-bg: rgba(10,13,18,.93);
-    --glass-shell-blur: 4px;
-    --glass-card-bg: rgba(15,19,26,.90);
-    --glass-card-blur: 3px;
-    --glass-elevated-bg: rgba(20,25,33,.94);
-    --glass-elevated-blur: 4px;
-    --glass-modal-bg: rgba(8,11,16,.98);
-    --glass-modal-blur: 5px;
+    --glass-shell-bg: rgba(9,11,14,.97);
+    --glass-shell-blur: 2px;
+    --glass-card-bg: rgba(15,18,23,.96);
+    --glass-card-blur: 2px;
+    --glass-elevated-bg: rgba(17,20,26,.98);
+    --glass-elevated-blur: 2px;
+    --glass-modal-bg: rgba(10,12,16,.99);
+    --glass-modal-blur: 3px;
     --aurora-a: rgba(104,132,255,.07);
     --aurora-b: rgba(71,219,193,.04);
     --aurora-c: rgba(201,111,255,.03);
@@ -144,11 +144,9 @@
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(700px 420px at var(--glass-pointer-x) var(--glass-pointer-y), rgba(255,255,255,.018), transparent 62%),
-    radial-gradient(1000px 520px at 12% -8%, var(--aurora-a), transparent 62%),
-    radial-gradient(900px 500px at 92% 18%, var(--aurora-b), transparent 62%),
-    radial-gradient(800px 520px at 50% 108%, var(--aurora-c), transparent 65%),
-    #07090d;
+    radial-gradient(900px 520px at 10% 0%, var(--aurora-a), transparent 64%),
+    radial-gradient(800px 440px at 100% 18%, var(--aurora-b), transparent 66%),
+    #08090b;
   background-attachment: fixed;
 }
 
@@ -232,4 +230,30 @@ select:focus-visible {
     border-color: rgba(255,255,255,.06);
   }
   .cosmic-bg, .cosmic-sunset-bg { background-attachment: scroll; }
+}
+
+
+/* Clarity rules: never let decorative glass compete with interactive text. */
+.glass-shell,
+.glass-card,
+.glass-elevated,
+.glass-modal,
+.dynamic-glass {
+  color: var(--text-primary);
+}
+
+.glass-shell::after,
+.glass-card::after,
+.glass-elevated::after,
+.glass-modal::after {
+  opacity: .42;
+}
+
+.dynamic-glass::after {
+  opacity: .38;
+}
+
+@media (max-width: 640px) {
+  .dynamic-glass::before { opacity: .55; }
+  .dynamic-glass::after { opacity: .28; }
 }
