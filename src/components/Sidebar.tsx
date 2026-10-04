@@ -72,22 +72,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 flex flex-col glass-shell transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 flex flex-col bg-[#090b0e]/98 border-r border-white/8 transition-transform duration-300 lg:translate-x-0 ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo & Brand Header */}
-        <div className="px-4 py-3.5 flex items-center justify-between border-b border-white/8">
+        <div className="px-4 py-4 flex items-center justify-between border-b border-white/8">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-              <Sparkles className="w-5 h-5 text-white animate-pulse" />
+            <div className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center">
+              <Sparkles className="w-4.5 h-4.5 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-cyan-300 bg-clip-text text-transparent">
-                  LX AI
-                </span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                <span className="font-semibold text-lg tracking-tight text-white">LX AI</span>
+                <span className="text-[9px] font-medium uppercase tracking-[.12em] px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-500 border border-white/8">
                   {tier}
                 </span>
               </div>
@@ -124,13 +122,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
                   isActive
-                    ? 'bg-white/[0.08] text-white border border-white/10 shadow-sm'
-                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                    ? 'bg-white/[0.075] text-white border border-white/10'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.035]'
                 }`}
               >
                 <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
                 <span className="flex-1 text-left">{item.label}</span>
-                {isActive && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />}
+                {isActive && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
               </button>
             );
           })}
