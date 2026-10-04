@@ -25,6 +25,8 @@
     --aurora-b: rgba(71,219,193,.08);
     --aurora-c: rgba(201,111,255,.065);
     --shadow-xl: 0 24px 90px rgba(0,0,0,.42);
+    --glass-pointer-x: 50%;
+    --glass-pointer-y: 18%;
   }
 
   [data-tier="full"] {
@@ -86,7 +88,8 @@
 .glass-shell,
 .glass-card,
 .glass-elevated,
-.glass-modal {
+.glass-modal,
+.dynamic-glass {
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -141,6 +144,7 @@
   position: relative;
   isolation: isolate;
   background:
+    radial-gradient(700px 420px at var(--glass-pointer-x) var(--glass-pointer-y), rgba(255,255,255,.018), transparent 62%),
     radial-gradient(1000px 520px at 12% -8%, var(--aurora-a), transparent 62%),
     radial-gradient(900px 500px at 92% 18%, var(--aurora-b), transparent 62%),
     radial-gradient(800px 520px at 50% 108%, var(--aurora-c), transparent 65%),
