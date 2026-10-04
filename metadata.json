@@ -1,0 +1,10 @@
+{
+  "name": "LX AI — Personal AI Workspace",
+  "description": "The next-generation AI workspace featuring Dynamic Glass UI, conversational voice partner, multi-model intelligence, AI coding, search, and Telegram gateway.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

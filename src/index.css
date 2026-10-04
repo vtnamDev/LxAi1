@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-base: #070913;
+    --text-primary: #F3F4F6;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+    
+    /* Dynamic Glass Design Tokens */
+    --glass-shell-bg: rgba(12, 16, 34, 0.65);
+    --glass-shell-blur: 16px;
+    --glass-shell-border: rgba(255, 255, 255, 0.08);
+    
+    --glass-card-bg: rgba(18, 24, 48, 0.6);
+    --glass-card-blur: 12px;
+    --glass-card-border: rgba(255, 255, 255, 0.06);
+    
+    --glass-elevated-bg: rgba(24, 32, 64, 0.75);
+    --glass-elevated-blur: 14px;
+    --glass-elevated-border: rgba(56, 189, 248, 0.2);
+
+    --glass-modal-bg: rgba(10, 14, 28, 0.92);
+    --glass-modal-blur: 20px;
+    --glass-modal-border: rgba(255, 255, 255, 0.12);
+
+    --glow-primary: rgba(59, 130, 246, 0.25);
+    --glow-accent: rgba(6, 182, 212, 0.25);
+    --glow-secondary: rgba(139, 92, 246, 0.25);
+  }
+
+  /* 4-Tier Adaptive Performance */
+  /* Tier A: Full */
+  [data-tier="full"] {
+    --glass-shell-blur: 16px;
+    --glass-card-blur: 12px;
+    --glass-elevated-blur: 14px;
+    --glass-modal-blur: 20px;
+  }
+
+  /* Tier B: Balanced (Default Standard) */
+  [data-tier="balanced"] {
+    --glass-shell-blur: 10px;
+    --glass-card-blur: 8px;
+    --glass-elevated-blur: 10px;
+    --glass-modal-blur: 14px;
+  }
+
+  /* Tier C: Lite (Low-End / Battery Saver) */
+  [data-tier="lite"] {
+    --glass-shell-bg: rgba(12, 16, 34, 0.9);
+    --glass-shell-blur: 3px;
+    --glass-card-bg: rgba(18, 24, 48, 0.88);
+    --glass-card-blur: 2px;
+    --glass-elevated-bg: rgba(24, 32, 64, 0.92);
+    --glass-elevated-blur: 3px;
+    --glass-modal-bg: rgba(10, 14, 28, 0.97);
+    --glass-modal-blur: 4px;
+  }
+
+  /* Tier D: Minimal (High Contrast, Zero Filter) */
+  [data-tier="minimal"] {
+    --glass-shell-bg: #0c1022;
+    --glass-shell-blur: 0px;
+    --glass-card-bg: #121830;
+    --glass-card-blur: 0px;
+    --glass-elevated-bg: #182040;
+    --glass-elevated-blur: 0px;
+    --glass-modal-bg: #080c1a;
+    --glass-modal-blur: 0px;
+  }
+}
+
+/* Glass Surfaces */
+.glass-shell {
+  background: var(--glass-shell-bg);
+  backdrop-filter: blur(var(--glass-shell-blur));
+  -webkit-backdrop-filter: blur(var(--glass-shell-blur));
+  border: 1px solid var(--glass-shell-border);
+}
+
+.glass-card {
+  background: var(--glass-card-bg);
+  backdrop-filter: blur(var(--glass-card-blur));
+  -webkit-backdrop-filter: blur(var(--glass-card-blur));
+  border: 1px solid var(--glass-card-border);
+}
+
+.glass-elevated {
+  background: var(--glass-elevated-bg);
+  backdrop-filter: blur(var(--glass-elevated-blur));
+  -webkit-backdrop-filter: blur(var(--glass-elevated-blur));
+  border: 1px solid var(--glass-elevated-border);
+}
+
+.glass-modal {
+  background: var(--glass-modal-bg);
+  backdrop-filter: blur(var(--glass-modal-blur));
+  -webkit-backdrop-filter: blur(var(--glass-modal-blur));
+  border: 1px solid var(--glass-modal-border);
+}
+
+/* Cosmic Nebula Background Gradients */
+.cosmic-bg {
+  background-color: #070913;
+  background-image: 
+    radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 85% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 50% 80%, rgba(6, 182, 212, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 70% 60%, rgba(236, 72, 153, 0.08) 0%, transparent 35%);
+  background-attachment: fixed;
+}
+
+.cosmic-sunset-bg {
+  background-color: #090915;
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(249, 115, 22, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(217, 70, 239, 0.14) 0%, transparent 45%),
+    radial-gradient(circle at 50% 90%, rgba(59, 130, 246, 0.12) 0%, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

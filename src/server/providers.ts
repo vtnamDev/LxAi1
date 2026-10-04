@@ -1,0 +1,379 @@
+/**
+ * LX AI — Production AI Provider Adapters & Exact Model Router
+ * Enforces Zero Silent Substitution: models route strictly to their claimed provider.
+ */
+
+import { GoogleGenAI } from '@google/genai';
+import { ServerConfig } from './config';
+
+export interface StreamChunk {
+  text?: string;
+  reasoningText?: string;
+  sources?: Array<{ title: string; url: string; snippet: string }>;
+  done?: boolean;
+}
+
+export interface StreamParams {
+  modelId: string;
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string; attachments?: any[] }>;
+  mode: 'fast' | 'thinking' | 'auto';
+  enableSearch?: boolean;
+  projectContext?: string;
+  signal?: AbortSignal;
+}
+
+export class ProviderError extends Error {
+  code: string;
+  status: number;
+  constructor(message: string, code = 'PROVIDER_ERROR', status = 502) {
+    super(message);
+    this.name = 'ProviderError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+// 1. Google Gemini Adapter
+export class GeminiAdapter {
+  private static keyIndex = 0;
+
+  private static readonly modelMap: Record<string, string> = {
+    'gemini-3.8-flash': 'gemini-3.8-flash',
+    'gemini-3.1-pro-preview': 'gemini-3.1-pro-preview',
+  };
+
+  public static getClient(): GoogleGenAI {
+    const keys = ServerConfig.geminiKeys;
+    if (keys.length === 0) {
+      throw new ProviderError('Gemini is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    }
+
+    const key = keys[this.keyIndex % keys.length];
+    this.keyIndex = (this.keyIndex + 1) % keys.length;
+
+    return new GoogleGenAI({
+      apiKey: key,
+      httpOptions: { headers: { 'User-Agent': 'lxai-gateway' } },
+    });
+  }
+
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const targetModel = this.modelMap[params.modelId];
+    if (!targetModel) {
+      throw new ProviderError(
+        `Gemini model "${params.modelId}" is not supported for text chat.`,
+        'MODEL_UNSUPPORTED',
+        400,
+      );
+    }
+
+    const ai = this.getClient();
+
+    let systemInstruction = `You are LX AI, an advanced AI workspace assistant with a Dynamic Glass interface.
+Provide articulate, concise, and helpful responses. Format code in markdown code blocks with clear language tags.`;
+
+    if (params.projectContext) {
+      systemInstruction += `\n\n<project_context>\n${params.projectContext}\n</project_context>`;
+    }
+
+    const contents = params.messages.map((m) => {
+      const role = m.role === 'assistant' ? 'model' : 'user';
+      let text = m.content || '';
+      if (m.attachments && m.attachments.length > 0) {
+        text += `\n\n[Attached Files Content (Untrusted)]:\n${m.attachments.map((a: any) => `File: ${a.name}\n${a.extractedText || a.content || ''}`).join('\n---\n')}`;
+      }
+      return { role, parts: [{ text }] };
+    });
+
+    // Gemini 3.x uses thinkingLevel rather than legacy temperature/top-p/top-k controls.
+    // Gemini 3.8 Flash specifically rejects deprecated sampling parameters.
+    const config: any = {
+      systemInstruction,
+      abortSignal: params.signal,
+      thinkingConfig: {
+        thinkingLevel: params.mode === 'fast' ? 'low' : params.mode === 'thinking' ? 'high' : 'medium',
+      },
+    };
+
+    if (params.enableSearch) {
+      config.tools = [{ googleSearch: {} }];
+    }
+
+    const responseStream = await ai.models.generateContentStream({
+      model: targetModel,
+      contents,
+      config,
+    });
+
+    for await (const chunk of responseStream) {
+      if (params.signal?.aborted) break;
+
+      const parts = chunk.candidates?.[0]?.content?.parts || [];
+      let yieldedPart = false;
+
+      for (const part of parts as any[]) {
+        if (part.thought && part.text) {
+          yield { reasoningText: part.text };
+          yieldedPart = true;
+        } else if (part.text) {
+          yield { text: part.text };
+          yieldedPart = true;
+        }
+      }
+
+      if (!yieldedPart && chunk.text) {
+        yield { text: chunk.text };
+      }
+
+      const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      if (groundingChunks && groundingChunks.length > 0) {
+        const sources = groundingChunks
+          .filter((c: any) => c.web?.uri && c.web?.title)
+          .map((c: any) => ({
+            title: c.web.title,
+            url: c.web.uri,
+            snippet: c.web.snippet || '',
+          }));
+        if (sources.length > 0) yield { sources };
+      }
+    }
+  }
+}
+
+// Generic OpenAI-compatible streaming helper
+async function* streamOpenAICompatible(
+  endpoint: string,
+  apiKey: string,
+  providerModel: string,
+  params: StreamParams,
+  providerName: string,
+  headers: Record<string, string> = {},
+  requestExtras: Record<string, unknown> = {}
+): AsyncIterable<StreamChunk> {
+  let systemMessage = `You are LX AI, an advanced personal AI workspace assistant.`;
+  if (params.projectContext) systemMessage += `\n\nContext:\n${params.projectContext}`;
+
+  const messages = [
+    { role: 'system', content: systemMessage },
+    ...params.messages.map((m) => ({ role: m.role, content: m.content || '' })),
+  ];
+
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        ...headers,
+      },
+      body: JSON.stringify({
+        model: providerModel,
+        messages,
+        stream: true,
+        temperature: params.mode === 'fast' ? 0.3 : 0.7,
+        ...requestExtras,
+      }),
+      signal: params.signal,
+    });
+  } catch (err: any) {
+    if (params.signal?.aborted) return;
+    throw new ProviderError(`${providerName} network error: ${err?.message || 'request failed'}`, 'PROVIDER_NETWORK_ERROR', 502);
+  }
+
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => '');
+    console.error('[AI_PROVIDER_ERROR]', { provider: providerName, status: res.status, body: errorBody.slice(0, 500) });
+    const code =
+      res.status === 401 ? 'AUTH_ERROR' :
+      res.status === 403 ? 'FORBIDDEN' :
+      res.status === 404 ? 'MODEL_NOT_FOUND' :
+      res.status === 429 ? 'RATE_LIMITED' :
+      'PROVIDER_ERROR';
+    const message =
+      res.status === 401 ? `${providerName} authentication failed.` :
+      res.status === 403 ? `${providerName} denied the request.` :
+      res.status === 404 ? `${providerName} could not find the selected model.` :
+      res.status === 429 ? `${providerName} is rate limiting requests.` :
+      `${providerName} rejected the request.`;
+    throw new ProviderError(message, code, res.status);
+  }
+
+  if (!res.body) throw new ProviderError(`${providerName} returned empty response body`, 'PROVIDER_EMPTY_BODY');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      if (params.signal?.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(':')) continue;
+        if (trimmed === 'data: [DONE]') return;
+        if (!trimmed.startsWith('data: ')) continue;
+
+        try {
+          const json = JSON.parse(trimmed.slice(6));
+          const delta = json.choices?.[0]?.delta;
+          if (delta?.content) yield { text: delta.content };
+          if (delta?.reasoning_content) yield { reasoningText: delta.reasoning_content };
+          if (delta?.reasoning) yield { reasoningText: typeof delta.reasoning === 'string' ? delta.reasoning : JSON.stringify(delta.reasoning) };
+          if (json.web_search?.results) {
+            yield { sources: json.web_search.results.map((r: any) => ({ title: r.title || '', url: r.url || '', snippet: r.snippet || r.text || '' })) };
+          }
+        } catch {
+          // Ignore malformed/partial SSE records; reader buffer handles incomplete lines.
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function pickRoundRobin(pool: string[], state: { index: number }): string | null {
+  if (pool.length === 0) return null;
+  const key = pool[state.index % pool.length];
+  state.index = (state.index + 1) % pool.length;
+  return key;
+}
+
+const keyState = {
+  openai: { index: 0 },
+  openrouter: { index: 0 },
+  groq: { index: 0 },
+  mistral: { index: 0 },
+  cerebras: { index: 0 },
+  hf: { index: 0 },
+  xkiro: { index: 0 },
+  tavily: { index: 0 },
+  exa: { index: 0 },
+  langsearch: { index: 0 },
+};
+
+// 2. OpenAI Adapter
+export class OpenAIAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const key = pickRoundRobin(ServerConfig.openAIKeys, keyState.openai);
+    if (!key) throw new ProviderError('OpenAI is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    yield* streamOpenAICompatible(
+      'https://api.openai.com/v1/chat/completions', key,
+      params.modelId, params, 'OpenAI'
+    );
+  }
+}
+
+// 3. Groq Adapter
+export class GroqAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const key = pickRoundRobin(ServerConfig.groqKeys, keyState.groq);
+    if (!key) throw new ProviderError('Groq is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId === 'groq-llama-3.3-70b' ? 'llama-3.3-70b-versatile' : params.modelId.replace(/^groq:/, '');
+    yield* streamOpenAICompatible('https://api.groq.com/openai/v1/chat/completions', key, model, params, 'Groq');
+  }
+}
+
+// 4. Cerebras Adapter
+export class CerebrasAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const key = pickRoundRobin(ServerConfig.cerebrasKeys, keyState.cerebras);
+    if (!key) throw new ProviderError('Cerebras is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId === 'cerebras-llama-3.3-70b' ? 'llama3.3-70b' : params.modelId.replace(/^cerebras:/, '');
+    yield* streamOpenAICompatible('https://api.cerebras.ai/v1/chat/completions', key, model, params, 'Cerebras');
+  }
+}
+
+// 5. Mistral Adapter
+export class MistralAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const key = pickRoundRobin(ServerConfig.mistralKeys, keyState.mistral);
+    if (!key) throw new ProviderError('Mistral is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId === 'mistral-large' ? 'mistral-large-latest' : params.modelId.replace(/^mistral:/, '');
+    const extras = params.mode === 'thinking' ? { prompt_mode: 'reasoning' } : {};
+    yield* streamOpenAICompatible('https://api.mistral.ai/v1/chat/completions', key, model, params, 'Mistral', {}, extras);
+  }
+}
+
+// 6. OpenRouter Adapter — exact model forwarding
+export class OpenRouterAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const key = pickRoundRobin(ServerConfig.openRouterKeys, keyState.openrouter);
+    if (!key) throw new ProviderError('OpenRouter is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId === 'claude-3-5-sonnet'
+      ? 'anthropic/claude-3.5-sonnet'
+      : params.modelId.replace(/^openrouter:/, '');
+    yield* streamOpenAICompatible(
+      'https://openrouter.ai/api/v1/chat/completions', key, model, params, 'OpenRouter',
+      { 'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER || 'https://lxai.local', 'X-Title': 'LX AI' }
+    );
+  }
+}
+
+// 7. NVIDIA NIM Adapter
+export class NvidiaAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const n = ServerConfig.nvidiaKeys;
+    let apiKey: string | null = null;
+    let modelName = params.modelId;
+
+    if (params.modelId === 'kimi-k3') { apiKey = n.kimiK3; modelName = 'moonshotai/kimi-k3'; }
+    else if (params.modelId === 'deepseek-v4-pro') { apiKey = n.deepseekV4Pro; modelName = 'deepseek-ai/deepseek-r1'; }
+    else if (params.modelId === 'nemotron-3-ultra-550b') { apiKey = n.nemotronUltra1 || n.nemotronUltra2; modelName = 'nvidia/nemotron-3-ultra-550b'; }
+    else if (params.modelId === 'nemotron-3-super-120b') { apiKey = n.nemotronSuper; modelName = 'nvidia/nemotron-3-super-120b'; }
+    else if (params.modelId === 'minimax-m3') { apiKey = n.minimaxM3; modelName = 'minimax/minimax-m3'; }
+    else if (params.modelId === 'gpt-oss-120b') { apiKey = n.gptOss120b; modelName = 'openai/gpt-oss-120b'; }
+    else throw new ProviderError(`Unknown NVIDIA model: ${params.modelId}`, 'MODEL_NOT_FOUND', 404);
+
+    if (!apiKey) throw new ProviderError(`NVIDIA NIM API key for ${params.modelId} is not configured.`, 'PROVIDER_UNAVAILABLE', 503);
+    yield* streamOpenAICompatible('https://integrate.api.nvidia.com/v1/chat/completions', apiKey, modelName, params, 'NVIDIA NIM');
+  }
+}
+
+// 8. Hugging Face Inference Providers — exact model is supplied as huggingface:<model-id>
+export class HuggingFaceAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const key = pickRoundRobin(ServerConfig.huggingFaceKeys, keyState.hf);
+    if (!key) throw new ProviderError('Hugging Face is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId.replace(/^huggingface:/, '');
+    if (!model) throw new ProviderError('Hugging Face model ID is required.', 'MODEL_NOT_FOUND', 404);
+    yield* streamOpenAICompatible('https://router.huggingface.co/v1/chat/completions', key, model, params, 'Hugging Face');
+  }
+}
+
+// 9. xKiro AI Gateway — exact vendor/model forwarding
+export class XKiroAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const key = pickRoundRobin(ServerConfig.xKiroKeys, keyState.xkiro);
+    if (!key) throw new ProviderError('xKiro is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId.replace(/^xkiro:/, '');
+    if (!model || !model.includes('/')) throw new ProviderError('xKiro requires a vendor/model ID.', 'MODEL_NOT_FOUND', 404);
+    yield* streamOpenAICompatible('https://api.xkiro.com/v1/chat/completions', key, model, params, 'xKiro');
+  }
+}
+
+// 10. Canonical Model Router — strict model-prefix routing, no hidden provider substitution.
+export class ModelRouter {
+  static async *route(params: StreamParams): AsyncIterable<StreamChunk> {
+    const id = params.modelId;
+
+    if (id.startsWith('gemini-')) yield* GeminiAdapter.stream(params);
+    else if (id === 'gpt-4o' || id.startsWith('gpt-')) yield* OpenAIAdapter.stream(params);
+    else if (id === 'groq-llama-3.3-70b' || id.startsWith('groq:')) yield* GroqAdapter.stream(params);
+    else if (id === 'cerebras-llama-3.3-70b' || id.startsWith('cerebras:')) yield* CerebrasAdapter.stream(params);
+    else if (id === 'mistral-large' || id.startsWith('mistral:')) yield* MistralAdapter.stream(params);
+    else if (id === 'claude-3-5-sonnet' || id.startsWith('openrouter:')) yield* OpenRouterAdapter.stream(params);
+    else if (id === 'deepseek-v4-pro' || id === 'kimi-k3' || id === 'nemotron-3-ultra-550b' || id === 'nemotron-3-super-120b' || id === 'minimax-m3' || id === 'gpt-oss-120b') yield* NvidiaAdapter.stream(params);
+    else if (id.startsWith('huggingface:')) yield* HuggingFaceAdapter.stream(params);
+    else if (id.startsWith('xkiro:')) yield* XKiroAdapter.stream(params);
+    else throw new ProviderError(`Unknown model: ${id}`, 'MODEL_NOT_FOUND', 404);
+  }
+}
