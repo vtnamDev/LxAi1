@@ -85,6 +85,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
     el.style.setProperty('--glass-y', String(Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) + '%'));
   };
 
+  const updateGlass = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty('--glass-x', String(Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)) + '%'));
+    el.style.setProperty('--glass-y', String(Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) + '%'));
+  };
+
   // Helper to render markdown and code blocks safely
   const renderMessageContent = (content: string, msgId: string) => {
     const parts = content.split(/(```[\s\S]*?```)/g);
@@ -189,10 +197,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
               className={`flex flex-col ${isAssistant ? 'items-start' : 'items-end'} animate-in fade-in`}
             >
               <div
+                onPointerMove={isAssistant ? undefined : updateGlass}
                 className={`max-w-3xl rounded-3xl p-4 md:p-5 text-sm shadow-xl ${
                   isAssistant
                     ? 'glass-card border border-white/10 text-slate-200'
-                    : 'bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white shadow-cyan-500/20'
+                    : 'dynamic-glass bg-white/[0.055] border border-white/10 text-white'
                 }`}
               >
                 {/* Assistant Reasoning Accordion if present */}
