@@ -645,7 +645,7 @@ export default function App() {
 
   if (!user && authChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+      <div className="min-h-dvh flex items-center justify-center bg-[#07090d] text-white">
         <div className="text-sm text-white/60">Validating LX AI session…</div>
       </div>
     );
@@ -657,7 +657,7 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen ${
+      className={`min-h-dvh ${
         theme === 'cosmic' ? 'cosmic-bg' : 'cosmic-sunset-bg'
       } text-[#F3F4F6] flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200`}
     >
@@ -683,7 +683,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div className="lg:pl-72 flex-1 flex flex-col min-h-screen">
+      <div className="lg:pl-64 flex-1 min-h-0 flex flex-col">
         <Header
           onToggleMobileMenu={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           onOpenVoicePartner={() => setIsVoicePartnerOpen(true)}
@@ -694,7 +694,7 @@ export default function App() {
           onToggleTheme={() => setTheme(theme === 'cosmic' ? 'sunset' : 'cosmic')}
         />
 
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {currentView === 'home' && (
             <HomeView
               onSendMessage={handleSendMessage}
