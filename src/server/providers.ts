@@ -35,11 +35,8 @@ export class ProviderError extends Error {
 
 // 1. Google Gemini Adapter
 export class GeminiAdapter {
-  private static keyIndex = 0;
-
   private static readonly modelMap: Record<string, string> = {
     'gemini-3.8-flash': 'gemini-3.8-flash',
-    'gemini-3.1-pro-preview': 'gemini-3.1-pro-preview',
   };
 
   public static getClient(): GoogleGenAI {
@@ -48,9 +45,7 @@ export class GeminiAdapter {
       throw new ProviderError('Gemini is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
     }
 
-    const key = keys[this.keyIndex % keys.length];
-    this.keyIndex = (this.keyIndex + 1) % keys.length;
-
+    const key = keys[Math.floor(Math.random() * keys.length)];
     return new GoogleGenAI({
       apiKey: key,
       httpOptions: { headers: { 'User-Agent': 'lxai-gateway' } },
