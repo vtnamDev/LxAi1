@@ -8,7 +8,6 @@ import {
   Zap,
   Brain,
   Square,
-  RotateCcw,
   Copy,
   Check,
   ChevronDown,
@@ -16,8 +15,6 @@ import {
   Cpu,
   ExternalLink,
   Trash2,
-  Download,
-  AlertCircle
 } from 'lucide-react';
 import { Message, Conversation, ModeType, ModelInfo, Attachment } from '../types';
 
@@ -33,11 +30,13 @@ interface ChatViewProps {
   isStreaming: boolean;
 }
 
+const isGroq = (model: ModelInfo) =>
+  model.provider.toLowerCase() === 'groq' || model.id.startsWith('groq:');
+
 export const ChatView: React.FC<ChatViewProps> = ({
   conversation,
   onSendMessage,
   onStopGeneration,
-  onRegenerate,
   onClearChat,
   onOpenVoicePartner,
   onOpenModelSelector,
@@ -49,309 +48,269 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const [expandedReasoningIds, setExpandedReasoningIds] = useState<Record<string, boolean>>({});
-
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const feedRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-scroll on new messages or streaming chunks
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!conversation?.mode) return;
+    setMode(conversation.mode);
+  }, [conversation?.id, conversation?.mode]);
+
+  useEffect(() => {
+    const feed = feedRef.current;
+    if (!feed) return;
+    const distanceFromBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
+    if (distanceFromBottom < 160 || isStreaming) {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: isStreaming ? 'auto' : 'smooth',
+        block: 'end',
+      });
+    }
   }, [conversation?.messages, isStreaming]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || isStreaming) return;
-    onSendMessage(inputText.trim(), mode, selectedModel.id, searchEnabled);
+    const value = inputText.trim();
+    if (!value || isStreaming) return;
+    onSendMessage(value, mode, selectedModel.id, searchEnabled);
     setInputText('');
   };
 
   const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard?.writeText(text).catch(() => {});
     setCopiedCodeId(id);
-    setTimeout(() => setCopiedCodeId(null), 2000);
+    window.setTimeout(() => setCopiedCodeId(null), 1800);
   };
 
   const toggleReasoning = (msgId: string) => {
-    setExpandedReasoningIds((prev) => ({
-      ...prev,
-      [msgId]: !prev[msgId],
-    }));
+    setExpandedReasoningIds((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
   };
 
-  const updateGlass = (event: React.PointerEvent<HTMLElement>) => {
-    if (event.pointerType !== 'mouse') return;
-    const el = event.currentTarget;
-    const rect = el.getBoundingClientRect();
-    el.style.setProperty('--glass-x', String(Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)) + '%'));
-    el.style.setProperty('--glass-y', String(Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) + '%'));
-  };
-
-  const updateGlass = (event: React.PointerEvent<HTMLElement>) => {
-    if (event.pointerType !== 'mouse') return;
-    const el = event.currentTarget;
-    const rect = el.getBoundingClientRect();
-    el.style.setProperty('--glass-x', String(Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)) + '%'));
-    el.style.setProperty('--glass-y', String(Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) + '%'));
-  };
-
-  // Helper to render markdown and code blocks safely
   const renderMessageContent = (content: string, msgId: string) => {
     const parts = content.split(/(```[\s\S]*?```)/g);
 
     return parts.map((part, index) => {
       if (part.startsWith('```') && part.endsWith('```')) {
         const lines = part.slice(3, -3).trim().split('\n');
-        const language = lines[0].trim() || 'code';
+        const language = lines[0]?.trim() || 'code';
         const codeText = lines.slice(1).join('\n');
         const codeBlockId = `${msgId}_code_${index}`;
 
         return (
-          <div key={index} className="my-3 rounded-2xl overflow-hidden border border-white/10 bg-[#090d1f] shadow-lg">
-            <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/10 text-xs text-slate-400">
-              <span className="font-mono text-cyan-300 uppercase tracking-wider">{language}</span>
+          <div key={index} className="my-3 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0e12]">
+            <div className="flex items-center justify-between border-b border-white/8 px-3.5 py-2">
+              <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                {language}
+              </span>
               <button
+                type="button"
                 onClick={() => copyToClipboard(codeText, codeBlockId)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] text-slate-400 transition hover:bg-white/[0.08] hover:text-white"
               >
                 {copiedCodeId === codeBlockId ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-emerald-300">Copied</span>
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    Copied
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy</span>
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy
                   </>
                 )}
               </button>
             </div>
-            <pre className="p-4 text-xs font-mono text-slate-200 overflow-x-auto leading-relaxed">
+            <pre className="max-h-[52vh] overflow-auto px-4 py-3 text-xs leading-6 text-slate-200">
               <code>{codeText}</code>
             </pre>
           </div>
         );
       }
 
-      // Normal text formatting (bold, bullet points)
       return (
-        <div key={index} className="whitespace-pre-wrap leading-relaxed">
+        <span key={index} className="whitespace-pre-wrap break-words">
           {part}
-        </div>
+        </span>
       );
     });
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col h-[calc(100dvh-4rem)] overflow-hidden">
-      {/* Conversation Top Header */}
-      <div className="px-4 py-3 border-b border-white/10 glass-shell flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onOpenModelSelector}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-500/40 text-white font-medium transition-colors cursor-pointer"
-          >
-            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="font-semibold">{selectedModel.displayName}</span>
-            <ChevronDown className="w-3 h-3 text-slate-400" />
-          </button>
-
-          <span className="capitalize px-2 py-0.5 rounded-md bg-white/5 text-slate-400 font-mono text-[11px]">
-            Mode: {mode}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onClearChat}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-white/5 transition-colors cursor-pointer"
-            title="Clear Chat History"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Message Feed */}
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 md:px-8 py-6 space-y-6">
-        {(!conversation || conversation.messages.length === 0) && (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-3 text-slate-500 py-16">
-            <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-              <Sparkles className="w-6 h-6 animate-pulse" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-white">Start a new conversation</h3>
-              <p className="text-xs text-slate-400 max-w-sm mt-1">
-                Type a prompt, attach files, enable web search, or click Live Voice to speak in real-time.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {conversation?.messages.map((msg) => {
-          const isAssistant = msg.role === 'assistant';
-          const isReasoningExpanded = expandedReasoningIds[msg.id];
-
-          return (
-            <div
-              key={msg.id}
-              className={`flex flex-col ${isAssistant ? 'items-start' : 'items-end'} animate-in fade-in`}
-            >
-              <div
-                onPointerMove={isAssistant ? undefined : updateGlass}
-                className={`max-w-3xl rounded-3xl p-4 md:p-5 text-sm shadow-xl ${
-                  isAssistant
-                    ? 'glass-card border border-white/10 text-slate-200'
-                    : 'dynamic-glass bg-white/[0.055] border border-white/10 text-white'
-                }`}
-              >
-                {/* Assistant Reasoning Accordion if present */}
-                {isAssistant && msg.reasoningContent && (
-                  <div className="mb-3 rounded-2xl bg-black/40 border border-purple-500/20 overflow-hidden text-xs">
-                    <button
-                      onClick={() => toggleReasoning(msg.id)}
-                      className="w-full flex items-center justify-between px-3.5 py-2 text-purple-300 font-medium hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Brain className="w-3.5 h-3.5 text-purple-400" />
-                        <span>Reasoning Process</span>
-                      </div>
-                      {isReasoningExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </button>
-                    {isReasoningExpanded && (
-                      <div className="p-3 text-slate-400 font-mono text-[11px] whitespace-pre-wrap border-t border-purple-500/20 bg-black/20 leading-relaxed">
-                        {msg.reasoningContent}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Web Search Sources Cards */}
-                {isAssistant && msg.sources && msg.sources.length > 0 && (
-                  <div className="mb-3 space-y-1.5">
-                    <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>Search Sources</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {msg.sources.map((src, i) => (
-                        <a
-                          key={i}
-                          href={src.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors flex items-start justify-between group"
-                        >
-                          <div className="pr-2">
-                            <div className="text-xs font-medium text-cyan-300 line-clamp-1 group-hover:underline">
-                              {src.title}
-                            </div>
-                            <div className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">{src.snippet}</div>
-                          </div>
-                          <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-cyan-300 shrink-0 mt-0.5" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Message Body */}
-                <div className="prose prose-invert max-w-none text-sm leading-relaxed">
-                  {renderMessageContent(msg.content, msg.id)}
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        ref={feedRef}
+        className="chat-feed min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-6 sm:px-5 md:px-8"
+      >
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-7 pb-5">
+          {(!conversation || conversation.messages.length === 0) && (
+            <div className="flex min-h-full items-center justify-center py-24">
+              <div className="w-full max-w-xl text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.06]">
+                  <Sparkles className="h-5 w-5 text-emerald-300" />
                 </div>
+                <h2 className="text-lg font-semibold tracking-tight text-white">Start a new conversation</h2>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+                  Ask a question, write code, research something, or attach a file.
+                </p>
+              </div>
+            </div>
+          )}
 
-                {/* Footer Metadata */}
-                <div className="flex items-center justify-between gap-3 mt-3 pt-2 border-t border-white/10 text-[10px] text-slate-400">
-                  <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  {isAssistant && msg.tokens && (
-                    <span>~{msg.tokens} tokens</span>
+          {conversation?.messages.map((msg) => {
+            const isAssistant = msg.role === 'assistant';
+            const reasoningOpen = expandedReasoningIds[msg.id];
+
+            return (
+              <article
+                key={msg.id}
+                className={isAssistant ? 'flex justify-start' : 'flex justify-end'}
+              >
+                <div
+                  className={
+                    isAssistant
+                      ? 'w-full max-w-[48rem] text-[15px] leading-7 text-slate-200'
+                      : 'max-w-[42rem] rounded-[24px] rounded-br-md border border-white/10 bg-white/[0.075] px-4 py-3.5 text-[15px] leading-7 text-white shadow-[0_12px_30px_rgba(0,0,0,.22)]'
+                  }
+                >
+                  {isAssistant && msg.reasoningContent && (
+                    <div className="mb-3 overflow-hidden rounded-2xl border border-white/8 bg-white/[0.025]">
+                      <button
+                        type="button"
+                        onClick={() => toggleReasoning(msg.id)}
+                        className="flex w-full items-center justify-between px-3.5 py-2.5 text-xs text-slate-400 transition hover:bg-white/[0.035] hover:text-white"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Brain className="h-3.5 w-3.5 text-purple-300" />
+                          Reasoning
+                        </span>
+                        {reasoningOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
+                      {reasoningOpen && (
+                        <div className="max-h-72 overflow-auto border-t border-white/8 px-3.5 py-3 font-mono text-[11px] leading-5 text-slate-500">
+                          {msg.reasoningContent}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {isAssistant && msg.sources && msg.sources.length > 0 && (
+                    <div className="mb-4">
+                      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-600">
+                        <Globe className="h-3 w-3" />
+                        Sources
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.sources.map((src, i) => (
+                          <a
+                            key={i}
+                            href={src.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group inline-flex max-w-full items-center gap-2 rounded-full border border-white/8 bg-white/[0.025] px-3 py-1.5 text-[11px] text-slate-400 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+                          >
+                            <span className="max-w-[16rem] truncate">{src.title}</span>
+                            <ExternalLink className="h-3 w-3 shrink-0 opacity-50 group-hover:opacity-100" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>{renderMessageContent(msg.content, msg.id)}</div>
+
+                  {isAssistant && (
+                    <div className="mt-3 flex items-center gap-3 text-[10px] text-slate-600">
+                      <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      {msg.tokens ? <span>• {msg.tokens} tokens</span> : null}
+                    </div>
                   )}
                 </div>
-              </div>
+              </article>
+            );
+          })}
+
+          {isStreaming && (
+            <div className="flex items-center gap-2 pl-1 text-xs text-slate-500">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              <span>LX AI is thinking…</span>
             </div>
-          );
-        })}
+          )}
 
-        {/* Live Streaming indicator */}
-        {isStreaming && (
-          <div className="flex items-center gap-2 text-xs text-cyan-400 animate-pulse pl-2">
-            <Sparkles className="w-4 h-4" />
-            <span>LX AI is generating response...</span>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} className="h-px shrink-0" />
+        </div>
       </div>
 
-      {/* Floating Bottom Composer */}
-      <div className="p-3 sm:p-4 md:px-8 border-t border-white/8 glass-shell">
-        <div
-          className="dynamic-glass glass-elevated max-w-4xl mx-auto rounded-[26px] border border-white/12 p-3 shadow-2xl space-y-2"
-          onPointerMove={updateGlass}
-        >
-          {/* Controls Bar */}
-          <div className="flex items-center justify-between text-xs pb-1.5 border-b border-white/10">
-            <div className="flex items-center gap-1.5">
-              {/* Mode Pills */}
-              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/40 border border-white/10 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => setMode('fast')}
-                  className={`px-2 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                    mode === 'fast' ? 'bg-cyan-500/30 text-cyan-200' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Fast
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('thinking')}
-                  className={`px-2 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                    mode === 'thinking' ? 'bg-purple-500/30 text-purple-200' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Thinking
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('auto')}
-                  className={`px-2 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                    mode === 'auto' ? 'bg-emerald-500/30 text-emerald-200' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Auto
-                </button>
+      <div className="shrink-0 border-t border-white/8 bg-[#090b0e]/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl sm:px-5 md:px-8">
+        <div className="mx-auto w-full max-w-4xl">
+          <form
+            onSubmit={handleSubmit}
+            className="dynamic-glass glass-elevated overflow-visible rounded-[26px] border border-white/12 p-2.5 shadow-[0_18px_60px_rgba(0,0,0,.36)]"
+          >
+            <div className="flex items-center gap-2 px-1 pb-2">
+              <button
+                type="button"
+                onClick={onOpenModelSelector}
+                className="inline-flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/[0.09]"
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${isGroq(selectedModel) ? 'bg-emerald-400' : 'bg-cyan-300'}`} />
+                <span className="max-w-[12rem] truncate">{selectedModel.displayName}</span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              </button>
+
+              <div className="flex items-center rounded-full border border-white/8 bg-black/20 p-1">
+                {([
+                  ['fast', 'Fast', Zap],
+                  ['thinking', 'Think', Brain],
+                  ['auto', 'Auto', Sparkles],
+                ] as const).map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setMode(id)}
+                    className={[
+                      'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[10px] font-medium transition',
+                      mode === id ? 'bg-white text-black' : 'text-slate-500 hover:text-white',
+                    ].join(' ')}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {label}
+                  </button>
+                ))}
               </div>
 
-              {/* Web Search Grounding Toggle */}
-              <button
-                type="button"
-                onClick={() => setSearchEnabled(!searchEnabled)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                  searchEnabled
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                    : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>Search</span>
-              </button>
+              <div className="ml-auto flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSearchEnabled((value) => !value)}
+                  className={[
+                    'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium transition',
+                    searchEnabled
+                      ? 'border-cyan-300/20 bg-cyan-300/10 text-cyan-200'
+                      : 'border-white/8 bg-white/[0.025] text-slate-500 hover:bg-white/[0.06] hover:text-white',
+                  ].join(' ')}
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Search</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenVoicePartner}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-500 transition hover:bg-white/[0.06] hover:text-white"
+                  title="Voice"
+                >
+                  <Mic className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onClearChat}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-500 transition hover:border-rose-400/20 hover:bg-rose-400/10 hover:text-rose-300"
+                  title="Clear chat"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Voice Partner Quick Button */}
-              <button
-                type="button"
-                onClick={onOpenVoicePartner}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 transition-colors cursor-pointer"
-              >
-                <Mic className="w-3.5 h-3.5" />
-                <span>Voice Call</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Textarea Form */}
-          <form onSubmit={handleSubmit} className="flex items-end gap-2">
             <textarea
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -362,33 +321,57 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 }
               }}
               rows={2}
-              placeholder="Type your message or prompt here..."
-              className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 resize-none outline-none leading-relaxed"
+              placeholder="Message LX AI…"
+              className="max-h-40 min-h-[66px] w-full resize-none bg-transparent px-2.5 py-2 text-[15px] leading-6 text-white outline-none placeholder:text-slate-600 sm:text-base"
             />
 
-            <div className="flex items-center gap-2 shrink-0">
-              {isStreaming ? (
+            <div className="flex items-center justify-between px-1 pt-1.5">
+              <button
+                type="button"
+                onClick={() => onOpenModelSelector()}
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] text-slate-600 transition hover:bg-white/[0.035] hover:text-slate-300"
+              >
+                <Cpu className="h-3 w-3" />
+                <span className="max-w-[11rem] truncate">{selectedModel.provider}</span>
+              </button>
+
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={onStopGeneration}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 font-semibold text-xs transition-colors cursor-pointer"
+                  onClick={() => onOpenVoicePartner()}
+                  className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-500 transition hover:bg-white/[0.06] hover:text-white sm:flex"
+                  title="Voice"
                 >
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>Stop</span>
+                  <Mic className="h-4 w-4" />
                 </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={!inputText.trim()}
-                  className="p-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-cyan-500/20 transition-all cursor-pointer active:scale-95"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              )}
+                {isStreaming ? (
+                  <button
+                    type="button"
+                    onClick={onStopGeneration}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-rose-400/20 bg-rose-400/10 px-4 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/15"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                    Stop
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!inputText.trim()}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,.08)] transition hover:scale-[1.04] hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-25"
+                    title="Send"
+                  >
+                    <Send className="h-4 w-4 stroke-[2.5]" />
+                  </button>
+                )}
+              </div>
             </div>
           </form>
+
+          <div className="px-2 pt-2 text-center text-[9px] text-slate-700">
+            Enter to send · Shift+Enter for a new line
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
