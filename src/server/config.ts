@@ -111,6 +111,10 @@ export class ServerConfig {
     };
   }
 
+  static get googleClientId(): string | null {
+    return process.env.GOOGLE_CLIENT_ID?.trim() || null;
+  }
+
   static get telegramBotToken(): string | null {
     return process.env.TELEGRAM_BOT_TOKEN?.trim() || null;
   }
