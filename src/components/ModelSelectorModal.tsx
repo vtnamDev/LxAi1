@@ -52,7 +52,11 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   });
 
   // Group by provider
-  const providers = Array.from(new Set(filteredModels.map((m) => m.provider)));
+  const orderedModels = [...filteredModels].sort((a, b) => {
+    const rank = (m: ModelInfo) => m.id === 'groq:openai/gpt-oss-20b' ? 0 : m.provider.toLowerCase() === 'groq' ? 1 : 2;
+    return rank(a) - rank(b) || a.displayName.localeCompare(b.displayName);
+  });
+  const providers = Array.from(new Set(orderedModels.map((m) => m.provider)));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
@@ -65,7 +69,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-white tracking-tight">Select Intelligence Model</h3>
-              <p className="text-xs text-slate-400">Exact routing engine — no silent fallback or substitution</p>
+              <p className="text-xs text-slate-400">Live provider catalog · exact routing · no silent substitution</p>
             </div>
           </div>
 
@@ -122,7 +126,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             </div>
           ) : (
             providers.map((provider) => {
-              const providerModels = filteredModels.filter((m) => m.provider === provider);
+              const providerModels = orderedModels.filter((m) => m.provider === provider);
               return (
                 <div key={provider} className="space-y-1.5">
                   <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-2">
@@ -149,7 +153,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                               <span className="text-sm font-semibold text-white tracking-tight">
                                 {m.displayName}
                               </span>
-                              {m.isDefault && (
+                              {(m.id === 'groq:openai/gpt-oss-20b' || (m.isDefault && m.provider.toLowerCase() === 'groq')) && (
                                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
                                   Default
                                 </span>
