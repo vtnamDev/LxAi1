@@ -92,8 +92,15 @@ export default function App() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Models & Quota state
-  const [models, setModels] = useState<ModelInfo[]>(DEFAULT_MODELS);
-  const [selectedModel, setSelectedModel] = useState<ModelInfo>(DEFAULT_MODELS[0]);
+  const [models, setModels] = useState<ModelInfo[]>([DEFAULT_GROQ_MODEL]);
+  const [selectedModel, setSelectedModel] = useState<ModelInfo>(() => {
+    try {
+      const savedId = localStorage.getItem('lx_selected_model');
+      return savedId === DEFAULT_GROQ_MODEL.id ? DEFAULT_GROQ_MODEL : DEFAULT_GROQ_MODEL;
+    } catch {
+      return DEFAULT_GROQ_MODEL;
+    }
+  });
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [authChecking, setAuthChecking] = useState<boolean>(Boolean(sessionToken));
   const [authError, setAuthError] = useState<string | null>(null);
@@ -138,6 +145,23 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-tier', tier);
   }, [tier]);
+
+  useEffect(() => {
+    let raf = 0;
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        document.documentElement.style.setProperty('--glass-pointer-x', `${event.clientX}px`);
+        document.documentElement.style.setProperty('--glass-pointer-y', `${event.clientY}px`);
+      });
+    };
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('pointermove', handlePointerMove);
+    };
+  }, []);
 
   // Persist conversations to localStorage
   useEffect(() => {
@@ -203,12 +227,25 @@ export default function App() {
 
   const fetchModels = async () => {
     try {
-      const res = await fetch('/api/models');
+      const res = await fetch('/api/models', { cache: 'no-store' });
       const data = await res.json();
-      if (data.models && Array.isArray(data.models)) {
-        setModels(data.models);
+      if (data.models && Array.isArray(data.models) && data.models.length > 0) {
+        const liveModels = data.models as ModelInfo[];
+        const savedId = localStorage.getItem('lx_selected_model');
+        const persisted = savedId ? liveModels.find((m) => m.id === savedId) : undefined;
+        const groqDefault =
+          liveModels.find((m) => m.id === DEFAULT_GROQ_MODEL.id) ||
+          liveModels.find((m) => m.provider.toLowerCase() === 'groq');
+        setModels(liveModels);
+        setSelectedModel(persisted || groqDefault || liveModels[0]);
+      } else {
+        setModels([DEFAULT_GROQ_MODEL]);
+        setSelectedModel(DEFAULT_GROQ_MODEL);
       }
-    } catch (e) {}
+    } catch {
+      setModels([DEFAULT_GROQ_MODEL]);
+      setSelectedModel(DEFAULT_GROQ_MODEL);
+    }
   };
 
   const fetchConversations = async (token?: string) => {
@@ -661,7 +698,10 @@ export default function App() {
         selectedModelId={selectedModel.id}
         onSelectModel={(id) => {
           const found = models.find((m) => m.id === id);
-          if (found) setSelectedModel(found);
+          if (found) {
+            setSelectedModel(found);
+            try { localStorage.setItem('lx_selected_model', found.id); } catch {}
+          }
         }}
       />
 
