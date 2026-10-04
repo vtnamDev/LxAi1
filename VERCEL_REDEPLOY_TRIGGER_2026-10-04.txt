@@ -1,0 +1,3 @@
+Vercel redeploy trigger for Google OAuth environment configuration.
+
+No secrets are stored in this file.
