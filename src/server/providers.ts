@@ -143,7 +143,7 @@ Provide articulate, concise, and helpful responses. Format code in markdown code
 // Generic OpenAI-compatible streaming helper
 async function* streamOpenAICompatible(
   endpoint: string,
-  apiKey: string,
+  apiKeyOrPool: string | string[],
   providerModel: string,
   params: StreamParams,
   providerName: string,
@@ -158,27 +158,45 @@ async function* streamOpenAICompatible(
     ...params.messages.map((m) => ({ role: m.role, content: m.content || '' })),
   ];
 
-  let res: Response;
-  try {
-    res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        ...headers,
-      },
-      body: JSON.stringify({
-        model: providerModel,
-        messages,
-        stream: true,
-        temperature: params.mode === 'fast' ? 0.3 : 0.7,
-        ...requestExtras,
-      }),
-      signal: params.signal,
-    });
-  } catch (err: any) {
-    if (params.signal?.aborted) return;
-    throw new ProviderError(`${providerName} network error: ${err?.message || 'request failed'}`, 'PROVIDER_NETWORK_ERROR', 502);
+  let res: Response | null = null;
+  const keyOrder = randomKeyOrder(Array.isArray(apiKeyOrPool) ? apiKeyOrPool : [apiKeyOrPool]);
+
+  for (const apiKey of keyOrder) {
+    try {
+      const candidate = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          ...headers,
+        },
+        body: JSON.stringify({
+          model: providerModel,
+          messages,
+          stream: true,
+          temperature: params.mode === 'fast' ? 0.3 : 0.7,
+          ...requestExtras,
+        }),
+        signal: params.signal,
+      });
+
+      if (candidate.ok) {
+        res = candidate;
+        break;
+      }
+
+      // Retry another configured key for credential/rate/service failures.
+      if (![401, 403, 429, 500, 502, 503, 504].includes(candidate.status)) {
+        res = candidate;
+        break;
+      }
+    } catch (err: any) {
+      if (params.signal?.aborted) return;
+    }
+  }
+
+  if (!res) {
+    throw new ProviderError(`${providerName} unavailable after trying configured keys.`, 'PROVIDER_ERROR', 502);
   }
 
   if (!res.ok) {
@@ -240,33 +258,19 @@ async function* streamOpenAICompatible(
   }
 }
 
-function pickRoundRobin(pool: string[], state: { index: number }): string | null {
-  if (pool.length === 0) return null;
-  const key = pool[state.index % pool.length];
-  state.index = (state.index + 1) % pool.length;
-  return key;
+function randomKeyOrder(pool: string[]): string[] {
+  return [...pool].sort(() => Math.random() - 0.5);
 }
 
-const keyState = {
-  openai: { index: 0 },
-  openrouter: { index: 0 },
-  groq: { index: 0 },
-  mistral: { index: 0 },
-  cerebras: { index: 0 },
-  hf: { index: 0 },
-  xkiro: { index: 0 },
-  tavily: { index: 0 },
-  exa: { index: 0 },
-  langsearch: { index: 0 },
-};
+// Provider API-key pools are shuffled per request so multiple configured keys are exercised over time.
 
 // 2. OpenAI Adapter
 export class OpenAIAdapter {
   static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
-    const key = pickRoundRobin(ServerConfig.openAIKeys, keyState.openai);
-    if (!key) throw new ProviderError('OpenAI is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const keys = ServerConfig.openAIKeys;
+    if (!keys.length) throw new ProviderError('OpenAI is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
     yield* streamOpenAICompatible(
-      'https://api.openai.com/v1/chat/completions', key,
+      'https://api.openai.com/v1/chat/completions', keys,
       params.modelId, params, 'OpenAI'
     );
   }
@@ -275,45 +279,43 @@ export class OpenAIAdapter {
 // 3. Groq Adapter
 export class GroqAdapter {
   static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
-    const key = pickRoundRobin(ServerConfig.groqKeys, keyState.groq);
-    if (!key) throw new ProviderError('Groq is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
-    const model = params.modelId === 'groq-llama-3.3-70b' ? 'llama-3.3-70b-versatile' : params.modelId.replace(/^groq:/, '');
-    yield* streamOpenAICompatible('https://api.groq.com/openai/v1/chat/completions', key, model, params, 'Groq');
+    const keys = ServerConfig.groqKeys;
+    if (!keys.length) throw new ProviderError('Groq is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId.replace(/^groq:/, '');
+    yield* streamOpenAICompatible('https://api.groq.com/openai/v1/chat/completions', keys, model, params, 'Groq');
   }
 }
 
 // 4. Cerebras Adapter
 export class CerebrasAdapter {
   static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
-    const key = pickRoundRobin(ServerConfig.cerebrasKeys, keyState.cerebras);
-    if (!key) throw new ProviderError('Cerebras is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
-    const model = params.modelId === 'cerebras-llama-3.3-70b' ? 'llama3.3-70b' : params.modelId.replace(/^cerebras:/, '');
-    yield* streamOpenAICompatible('https://api.cerebras.ai/v1/chat/completions', key, model, params, 'Cerebras');
+    const keys = ServerConfig.cerebrasKeys;
+    if (!keys.length) throw new ProviderError('Cerebras is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId.replace(/^cerebras:/, '');
+    yield* streamOpenAICompatible('https://api.cerebras.ai/v1/chat/completions', keys, model, params, 'Cerebras');
   }
 }
 
 // 5. Mistral Adapter
 export class MistralAdapter {
   static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
-    const key = pickRoundRobin(ServerConfig.mistralKeys, keyState.mistral);
-    if (!key) throw new ProviderError('Mistral is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
-    const model = params.modelId === 'mistral-large' ? 'mistral-large-latest' : params.modelId.replace(/^mistral:/, '');
+    const keys = ServerConfig.mistralKeys;
+    if (!keys.length) throw new ProviderError('Mistral is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId.replace(/^mistral:/, '');
     const extras = params.mode === 'thinking' ? { prompt_mode: 'reasoning' } : {};
-    yield* streamOpenAICompatible('https://api.mistral.ai/v1/chat/completions', key, model, params, 'Mistral', {}, extras);
+    yield* streamOpenAICompatible('https://api.mistral.ai/v1/chat/completions', keys, model, params, 'Mistral', {}, extras);
   }
 }
 
 // 6. OpenRouter Adapter — exact model forwarding
 export class OpenRouterAdapter {
   static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
-    const key = pickRoundRobin(ServerConfig.openRouterKeys, keyState.openrouter);
-    if (!key) throw new ProviderError('OpenRouter is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
-    const model = params.modelId === 'claude-3-5-sonnet'
-      ? 'anthropic/claude-3.5-sonnet'
-      : params.modelId.replace(/^openrouter:/, '');
+    const keys = ServerConfig.openRouterKeys;
+    if (!keys.length) throw new ProviderError('OpenRouter is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const model = params.modelId.replace(/^openrouter:/, '');
     yield* streamOpenAICompatible(
-      'https://openrouter.ai/api/v1/chat/completions', key, model, params, 'OpenRouter',
-      { 'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER || 'https://lxai.local', 'X-Title': 'LX AI' }
+      'https://openrouter.ai/api/v1/chat/completions', keys, model, params, 'OpenRouter',
+      { 'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER || 'https://lxai1.vercel.app', 'X-Title': 'LX AI' }
     );
   }
 }
@@ -321,42 +323,33 @@ export class OpenRouterAdapter {
 // 7. NVIDIA NIM Adapter
 export class NvidiaAdapter {
   static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
-    const n = ServerConfig.nvidiaKeys;
-    let apiKey: string | null = null;
-    let modelName = params.modelId;
-
-    if (params.modelId === 'kimi-k3') { apiKey = n.kimiK3; modelName = 'moonshotai/kimi-k3'; }
-    else if (params.modelId === 'deepseek-v4-pro') { apiKey = n.deepseekV4Pro; modelName = 'deepseek-ai/deepseek-r1'; }
-    else if (params.modelId === 'nemotron-3-ultra-550b') { apiKey = n.nemotronUltra1 || n.nemotronUltra2; modelName = 'nvidia/nemotron-3-ultra-550b'; }
-    else if (params.modelId === 'nemotron-3-super-120b') { apiKey = n.nemotronSuper; modelName = 'nvidia/nemotron-3-super-120b'; }
-    else if (params.modelId === 'minimax-m3') { apiKey = n.minimaxM3; modelName = 'minimax/minimax-m3'; }
-    else if (params.modelId === 'gpt-oss-120b') { apiKey = n.gptOss120b; modelName = 'openai/gpt-oss-120b'; }
-    else throw new ProviderError(`Unknown NVIDIA model: ${params.modelId}`, 'MODEL_NOT_FOUND', 404);
-
-    if (!apiKey) throw new ProviderError(`NVIDIA NIM API key for ${params.modelId} is not configured.`, 'PROVIDER_UNAVAILABLE', 503);
-    yield* streamOpenAICompatible('https://integrate.api.nvidia.com/v1/chat/completions', apiKey, modelName, params, 'NVIDIA NIM');
+    const keys = Object.values(ServerConfig.nvidiaKeys).filter((v): v is string => Boolean(v));
+    if (!keys.length) throw new ProviderError('NVIDIA NIM is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const modelName = params.modelId.replace(/^nvidia:/, '');
+    if (!modelName) throw new ProviderError('NVIDIA model ID is required.', 'MODEL_NOT_FOUND', 404);
+    yield* streamOpenAICompatible('https://integrate.api.nvidia.com/v1/chat/completions', keys, modelName, params, 'NVIDIA NIM');
   }
 }
 
 // 8. Hugging Face Inference Providers — exact model is supplied as huggingface:<model-id>
 export class HuggingFaceAdapter {
   static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
-    const key = pickRoundRobin(ServerConfig.huggingFaceKeys, keyState.hf);
-    if (!key) throw new ProviderError('Hugging Face is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const keys = ServerConfig.huggingFaceKeys;
+    if (!keys.length) throw new ProviderError('Hugging Face is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
     const model = params.modelId.replace(/^huggingface:/, '');
     if (!model) throw new ProviderError('Hugging Face model ID is required.', 'MODEL_NOT_FOUND', 404);
-    yield* streamOpenAICompatible('https://router.huggingface.co/v1/chat/completions', key, model, params, 'Hugging Face');
+    yield* streamOpenAICompatible('https://router.huggingface.co/v1/chat/completions', keys, model, params, 'Hugging Face');
   }
 }
 
 // 9. xKiro AI Gateway — exact vendor/model forwarding
 export class XKiroAdapter {
   static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
-    const key = pickRoundRobin(ServerConfig.xKiroKeys, keyState.xkiro);
-    if (!key) throw new ProviderError('xKiro is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    const keys = ServerConfig.xKiroKeys;
+    if (!keys.length) throw new ProviderError('xKiro is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
     const model = params.modelId.replace(/^xkiro:/, '');
-    if (!model || !model.includes('/')) throw new ProviderError('xKiro requires a vendor/model ID.', 'MODEL_NOT_FOUND', 404);
-    yield* streamOpenAICompatible('https://api.xkiro.com/v1/chat/completions', key, model, params, 'xKiro');
+    if (!model) throw new ProviderError('xKiro model ID is required.', 'MODEL_NOT_FOUND', 404);
+    yield* streamOpenAICompatible('https://api.xkiro.com/v1/chat/completions', keys, model, params, 'xKiro');
   }
 }
 
@@ -366,12 +359,12 @@ export class ModelRouter {
     const id = params.modelId;
 
     if (id.startsWith('gemini-')) yield* GeminiAdapter.stream(params);
-    else if (id === 'gpt-4o' || id.startsWith('gpt-')) yield* OpenAIAdapter.stream(params);
-    else if (id === 'groq-llama-3.3-70b' || id.startsWith('groq:')) yield* GroqAdapter.stream(params);
-    else if (id === 'cerebras-llama-3.3-70b' || id.startsWith('cerebras:')) yield* CerebrasAdapter.stream(params);
-    else if (id === 'mistral-large' || id.startsWith('mistral:')) yield* MistralAdapter.stream(params);
-    else if (id === 'claude-3-5-sonnet' || id.startsWith('openrouter:')) yield* OpenRouterAdapter.stream(params);
-    else if (id === 'deepseek-v4-pro' || id === 'kimi-k3' || id === 'nemotron-3-ultra-550b' || id === 'nemotron-3-super-120b' || id === 'minimax-m3' || id === 'gpt-oss-120b') yield* NvidiaAdapter.stream(params);
+    else if (id.startsWith('gpt-') || /^o[134](?:-|$)/.test(id)) yield* OpenAIAdapter.stream(params);
+    else if (id.startsWith('groq:')) yield* GroqAdapter.stream(params);
+    else if (id.startsWith('cerebras:')) yield* CerebrasAdapter.stream(params);
+    else if (id.startsWith('mistral:')) yield* MistralAdapter.stream(params);
+    else if (id.startsWith('openrouter:')) yield* OpenRouterAdapter.stream(params);
+    else if (id.startsWith('nvidia:')) yield* NvidiaAdapter.stream(params);
     else if (id.startsWith('huggingface:')) yield* HuggingFaceAdapter.stream(params);
     else if (id.startsWith('xkiro:')) yield* XKiroAdapter.stream(params);
     else throw new ProviderError(`Unknown model: ${id}`, 'MODEL_NOT_FOUND', 404);
