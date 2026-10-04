@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Logo & Brand Header */}
         <div className="p-4 flex items-center justify-between border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+            <div className="w-9 h-9 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <Sparkles className="w-5 h-5 text-white animate-pulse" />
             </div>
             <div>
@@ -103,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onNewChat();
               onCloseMobile();
             }}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-medium text-sm text-white bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 shadow-md shadow-cyan-500/25 transition-all duration-200 cursor-pointer active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-medium text-sm text-white bg-white text-slate-950 hover:bg-slate-100 shadow-lg shadow-black/20 transition-all duration-200 cursor-pointer active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
             <span>New Chat</span>
@@ -124,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
                   isActive
-                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                    ? 'bg-white/[0.08] text-white border border-white/10 shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -183,7 +183,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Progress bar */}
             <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-cyan-400 to-indigo-500 transition-all duration-300"
+                className="h-full bg-white/60 transition-all duration-300"
                 style={{ width: `${quota?.percentage ?? 20}%` }}
               />
             </div>
@@ -213,7 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="w-8 h-8 rounded-full border border-white/20 bg-slate-800 shrink-0"
               />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-xs text-white shadow shrink-0">
+              <div className="w-8 h-8 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center font-bold text-xs text-white shadow shrink-0">
                 {user?.name ? user.name.slice(0, 2).toUpperCase() : 'NA'}
               </div>
             )}
