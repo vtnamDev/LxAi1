@@ -14,6 +14,7 @@ export interface User {
   name: string;
   avatarUrl?: string;
   provider: 'google' | 'email' | 'guest';
+  googleSub?: string;
   plan: 'free' | 'pro';
   createdAt: string;
 }
@@ -144,6 +145,51 @@ export class Database {
   }
 
   // ---------------- USER & SESSIONS ----------------
+  static createOrGetGoogleUser(googleSub: string, email: string, name: string, avatarUrl?: string): User {
+    this.init();
+
+    const bySub = Object.values(this.instance.users).find((u) => u.googleSub === googleSub);
+    if (bySub) return bySub;
+
+    const normalizedEmail = email.toLowerCase();
+    const byEmail = Object.values(this.instance.users).find((u) => u.email.toLowerCase() === normalizedEmail);
+
+    if (byEmail) {
+      byEmail.googleSub = googleSub;
+      byEmail.provider = 'google';
+      if (name.trim()) byEmail.name = name.trim();
+      if (avatarUrl) byEmail.avatarUrl = avatarUrl;
+      this.save();
+      return byEmail;
+    }
+
+    const id = `usr_${crypto.randomBytes(8).toString('hex')}`;
+    const user: User = {
+      id,
+      email: normalizedEmail,
+      name: name.trim() || normalizedEmail.split('@')[0],
+      avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(normalizedEmail)}`,
+      provider: 'google',
+      googleSub,
+      plan: 'pro',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.instance.users[id] = user;
+    this.instance.quotas[id] = {
+      userId: id,
+      usedTokens: 0,
+      limitTokens: 70000,
+      exhaustedAt: null,
+      cooldownMs: 3600000,
+      hasFree24h: false,
+      free24hExpiresAt: null,
+      redeemedVouchers: [],
+    };
+    this.save();
+    return user;
+  }
+
   static createOrGetUser(email: string, name: string, provider: 'google' | 'email' | 'guest', avatarUrl?: string): User {
     this.init();
     const existing = Object.values(this.instance.users).find((u) => u.email.toLowerCase() === email.toLowerCase());
