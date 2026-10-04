@@ -327,24 +327,6 @@ app.get('/api/models', async (_req: Request, res: Response) => {
         isDefault: true,
         description: 'Current stable Gemini Flash model for multimodal and coding workloads.',
       },
-      {
-        id: 'gemini-2.5-flash',
-        provider: 'Google',
-        displayName: 'Gemini 2.5 Flash',
-        capabilities: ['text', 'vision', 'code', 'reasoning', 'search', 'fast'],
-        contextWindow: 1048576,
-        status: 'active',
-        description: 'Stable multimodal reasoning model for high-volume workloads.',
-      },
-      {
-        id: 'gemini-2.5-pro',
-        provider: 'Google',
-        displayName: 'Gemini 2.5 Pro',
-        capabilities: ['text', 'vision', 'code', 'reasoning', 'search'],
-        contextWindow: 1048576,
-        status: 'active',
-        description: 'Stable reasoning model for complex coding and analysis.',
-      },
     );
   }
 
