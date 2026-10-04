@@ -98,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={handleDownloadZip}
           disabled={isDownloading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/25 to-blue-600/25 hover:from-cyan-500/35 hover:to-blue-600/35 border border-cyan-500/40 text-cyan-200 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95 group disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.10] border border-white/10 text-slate-200 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95 group disabled:opacity-50"
           title="Download complete project ZIP to deploy immediately"
         >
           <Download className={`w-3.5 h-3.5 text-cyan-400 group-hover:translate-y-0.5 transition-transform ${isDownloading ? 'animate-bounce' : ''}`} />
@@ -108,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Quick Voice Partner Action Button */}
         <button
           onClick={onOpenVoicePartner}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 hover:from-emerald-500/30 hover:to-cyan-500/30 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 text-xs font-medium shadow-sm transition-all cursor-pointer active:scale-95 group"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 hover:text-white text-xs font-medium shadow-sm transition-all cursor-pointer active:scale-95 group"
           title="Start real-time voice conversation partner"
         >
           <span className="relative flex h-2 w-2">
