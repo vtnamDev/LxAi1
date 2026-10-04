@@ -47,3 +47,5 @@ npm start
 ```bash
 npm run models:verify
 ```
+
+<!-- VERCEL_ENV_REDEPLOY_2026-10-04 -->
