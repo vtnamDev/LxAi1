@@ -14,6 +14,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { ServerConfig } from './src/server/config';
+import { OAuth2Client } from 'google-auth-library';
 import { Database, User } from './src/server/db';
 import { ModelRouter, GeminiAdapter, ProviderError } from './src/server/providers';
 
@@ -71,23 +72,100 @@ function optionalAuth(req: Request, res: Response, next: NextFunction) {
 // -------------------------------------------------------------
 // 1. Authentication Endpoints
 // -------------------------------------------------------------
-app.post('/api/auth/login', (req: Request, res: Response) => {
-  const { email, name, provider, avatarUrl } = req.body;
-  if (!email || typeof email !== 'string' || !email.includes('@')) {
-    return res.status(400).json({ error: 'A valid email address is required', code: 'INVALID_REQUEST' });
+// -------------------------------------------------------------
+// 1. Authentication Endpoints
+// -------------------------------------------------------------
+const googleOAuthClient = new OAuth2Client();
+
+app.get('/api/auth/google/config', (_req: Request, res: Response) => {
+  const clientId = ServerConfig.googleClientId;
+  if (!clientId) {
+    return res.status(503).json({
+      configured: false,
+      error: 'Google Sign-In is not configured on the server.',
+    });
+  }
+  return res.json({ configured: true, clientId });
+});
+
+app.post('/api/auth/google', async (req: Request, res: Response) => {
+  const { credential } = req.body;
+
+  if (!ServerConfig.googleClientId) {
+    return res.status(503).json({
+      error: 'Google Sign-In is not configured on the server.',
+      code: 'GOOGLE_AUTH_NOT_CONFIGURED',
+    });
   }
 
-  const user = Database.createOrGetUser(
-    email.trim(),
-    name?.trim() || email.split('@')[0],
-    provider || 'google',
-    avatarUrl
-  );
+  if (!credential || typeof credential !== 'string' || credential.length > 10000) {
+    return res.status(400).json({
+      error: 'A Google ID token is required.',
+      code: 'INVALID_GOOGLE_CREDENTIAL',
+    });
+  }
 
+  try {
+    const ticket = await googleOAuthClient.verifyIdToken({
+      idToken: credential,
+      audience: ServerConfig.googleClientId,
+    });
+    const payload = ticket.getPayload();
+
+    if (!payload || !payload.sub || !payload.email || payload.email_verified !== true) {
+      return res.status(401).json({
+        error: 'Google account verification failed.',
+        code: 'GOOGLE_IDENTITY_INVALID',
+      });
+    }
+
+    const issuer = payload.iss;
+    if (issuer !== 'accounts.google.com' && issuer !== 'https://accounts.google.com') {
+      return res.status(401).json({
+        error: 'Invalid Google token issuer.',
+        code: 'GOOGLE_ISSUER_INVALID',
+      });
+    }
+
+    const user = Database.createOrGetGoogleUser(
+      payload.sub,
+      payload.email,
+      payload.name || payload.email.split('@')[0],
+      payload.picture
+    );
+
+    const sessionToken = Database.createSession(user.id);
+    const quota = Database.getQuota(user.id);
+
+    return res.json({
+      user,
+      sessionToken,
+      quota: {
+        usedTokens: quota.usedTokens,
+        limitTokens: quota.limitTokens,
+        percentage: Math.min(100, Math.round((quota.usedTokens / quota.limitTokens) * 100)),
+        hasFree24h: quota.hasFree24h,
+        free24hExpiresAt: quota.free24hExpiresAt,
+      },
+    });
+  } catch (error: any) {
+    console.error('[GOOGLE_AUTH_ERROR]', {
+      message: error?.message,
+      code: error?.code,
+    });
+    return res.status(401).json({
+      error: 'Google authentication failed. Please try again.',
+      code: 'GOOGLE_AUTH_FAILED',
+    });
+  }
+});
+
+app.post('/api/auth/guest', (_req: Request, res: Response) => {
+  const guestEmail = `guest_${Date.now()}_${crypto.randomBytes(4).toString('hex')}@lxai.space`;
+  const user = Database.createOrGetUser(guestEmail, 'Guest Developer', 'guest');
   const sessionToken = Database.createSession(user.id);
   const quota = Database.getQuota(user.id);
-
-  res.json({
+  return res.json({
     user,
     sessionToken,
     quota: {
