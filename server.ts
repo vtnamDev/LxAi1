@@ -251,168 +251,168 @@ app.post('/api/quota/redeem', requireAuth, (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // 3. Models Registry (Zero Secret Leakage)
 // -------------------------------------------------------------
-app.get('/api/models', (req: Request, res: Response) => {
-  const models = [
-    {
-      id: 'gemini-3.8-flash',
-      provider: 'Google',
-      displayName: 'Gemini 3.8 Flash',
-      capabilities: ['text', 'vision', 'code', 'search', 'fast'],
-      contextWindow: 1000000,
-      status: 'active',
-      isDefault: true,
-      description: 'Ultra-fast multimodal reasoning with search grounding and code analysis.',
-    },
-    {
-      id: 'gemini-3.8-live',
-      provider: 'Google',
-      displayName: 'Gemini 3.8 Live (Voice)',
-      capabilities: ['audio', 'realtime', 'voice', 'duplex'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'Real-time conversational voice model with native duplex audio streaming.',
-    },
-    {
-      id: 'gemini-3.1-pro-preview',
-      provider: 'Google',
-      displayName: 'Gemini 3.1 Pro',
-      capabilities: ['text', 'reasoning', 'code', 'deep_analysis'],
-      contextWindow: 2000000,
-      status: 'active',
-      description: 'Flagship deep reasoning model for complex STEM, logic, and architecture.',
-    },
-    {
-      id: 'gpt-4o',
-      provider: 'OpenAI',
-      displayName: 'GPT-4o Multimodal',
-      capabilities: ['text', 'vision', 'code', 'tools'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'OpenAI flagship model with strong general intelligence and tool use.',
-    },
-    {
-      id: 'claude-3-5-sonnet',
-      provider: 'Anthropic',
-      displayName: 'Claude 3.5 Sonnet',
-      capabilities: ['text', 'code', 'reasoning', 'writing'],
-      contextWindow: 2000000,
-      status: 'active',
-      description: 'Industry-standard code generation and articulate nuanced prose via OpenRouter.',
-    },
-    {
-      id: 'deepseek-v4-pro',
-      provider: 'NVIDIA NIM',
-      displayName: 'DeepSeek V4 Pro (NVIDIA NIM)',
-      capabilities: ['code', 'reasoning', 'math', 'stem'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'High-density reasoning and code acceleration powered by NVIDIA NIM.',
-    },
-    {
-      id: 'kimi-k3',
-      provider: 'NVIDIA NIM',
-      displayName: 'Moonshot Kimi K3',
-      capabilities: ['text', 'long_context', 'research'],
-      contextWindow: 256000,
-      status: 'active',
-      description: 'Massive context comprehension and document research container.',
-    },
-    {
-      id: 'nemotron-3-ultra-550b',
-      provider: 'NVIDIA NIM',
-      displayName: 'Nemotron-3 Ultra 550B',
-      capabilities: ['reasoning', 'enterprise', 'large_scale'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'NVIDIA flagship 550B dense enterprise intelligence model.',
-    },
-    {
-      id: 'nemotron-3-super-120b',
-      provider: 'NVIDIA NIM',
-      displayName: 'Nemotron-3 Super 120B',
-      capabilities: ['code', 'reasoning', 'fast'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'Optimized high-efficiency reasoning engine from NVIDIA.',
-    },
-    {
-      id: 'minimax-m3',
-      provider: 'NVIDIA NIM',
-      displayName: 'MiniMax M3 Pro',
-      capabilities: ['text', 'multilingual', 'creative'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'Advanced Chinese and English multilingual reasoning model.',
-    },
-    {
-      id: 'gpt-oss-120b',
-      provider: 'NVIDIA NIM',
-      displayName: 'GPT-OSS 120B',
-      capabilities: ['open_weights', 'coding', 'stem'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'Open-weights architecture accelerated on NVIDIA Hopper architecture.',
-    },
-    {
-      id: 'groq-llama-3.3-70b',
-      provider: 'Groq',
-      displayName: 'Llama 3.3 70B (Groq LPU)',
-      capabilities: ['text', 'ultra_fast', 'low_latency'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'Ultra-low latency inference engine running at 380+ tokens/second on Groq LPUs.',
-    },
-    {
-      id: 'cerebras-llama-3.3-70b',
-      provider: 'Cerebras',
-      displayName: 'Llama 3.3 70B (Cerebras CS-3)',
-      capabilities: ['text', 'extreme_speed', 'low_latency'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'Wafer-scale engine delivering blazing 900+ tokens/second.',
-    },
-    {
-      id: 'mistral-large',
-      provider: 'Mistral',
-      displayName: 'Mistral Large 2',
-      capabilities: ['text', 'code', 'multilingual'],
-      contextWindow: 128000,
-      status: 'active',
-      description: 'Top-tier European reasoning model with multilingual fluency.',
-    },
-    {
-      id: 'huggingface:Qwen/Qwen3-Coder-480B-A35B-Instruct:fastest',
-      provider: 'Hugging Face',
-      displayName: 'Qwen3 Coder 480B (HF)',
-      capabilities: ['text', 'code', 'reasoning'],
-      contextWindow: 128000,
-      status: ServerConfig.getProviderStatus().huggingface ? 'active' : 'disabled',
-      description: 'Hugging Face Inference Providers via the OpenAI-compatible router.',
-    },
-    {
-      id: 'xkiro:openai/gpt-5.6-sol',
-      provider: 'xKiro',
-      displayName: 'GPT 5.6 SOL (xKiro)',
-      capabilities: ['text', 'code', 'reasoning', 'tools'],
-      contextWindow: 256000,
-      status: ServerConfig.getProviderStatus().xkiro ? 'active' : 'disabled',
-      description: 'xKiro OpenAI-compatible gateway with vendor/model IDs.',
-    },
-    {
-      id: 'llama-3.1-70b',
-      provider: 'Meta / legacy',
-      displayName: 'Llama 3.1 70B (legacy unavailable)',
-      capabilities: ['text', 'code', 'open_weights'],
-      contextWindow: 128000,
-      status: 'disabled',
-      description: 'Disabled because strict routing forbids silent provider substitution.',
-    },
-  ];
+type CatalogModel = {
+  id: string;
+  name?: string;
+  context_length?: number;
+  architecture?: { input_modalities?: string[]; output_modalities?: string[] };
+};
 
-  // Expose safe capability status only; NEVER expose raw keys or key masks
+const modelContext = (m: CatalogModel, fallback = 128000) =>
+  typeof m.context_length === 'number' && m.context_length > 0 ? m.context_length : fallback;
+
+const modelCapabilities = (m: CatalogModel): string[] => {
+  const caps = new Set<string>(['text']);
+  const inputs = m.architecture?.input_modalities || [];
+  if (inputs.includes('image')) caps.add('vision');
+  if (inputs.includes('audio')) caps.add('audio');
+  const text = `${m.id} ${m.name || ''}`;
+  if (/(code|coder|codestral|devstral|codex|qwen)/i.test(text)) caps.add('code');
+  if (/(reason|thinking|magistral|o[134]|gpt-5|gemini-3|deepseek)/i.test(text)) caps.add('reasoning');
+  if (/(tts|voice|audio|realtime|live|whisper|transcrib)/i.test(text)) caps.add('voice');
+  return [...caps];
+};
+
+async function listOpenAICompatibleModels(
+  endpoint: string,
+  keys: string[],
+  headers: Record<string, string> = {},
+): Promise<CatalogModel[]> {
+  if (!keys.length) return [];
+  const order = [...keys].sort(() => Math.random() - 0.5);
+  for (const key of order) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${key}`, ...headers },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) continue;
+      const data: any = await response.json();
+      const items = Array.isArray(data?.data) ? data.data : [];
+      return items.filter((m: any) => m && typeof m.id === 'string');
+    } catch {}
+  }
+  return [];
+}
+
+function mapCatalog(provider: string, items: CatalogModel[], prefix: string, limit = 80): ModelInfo[] {
+  return items
+    .filter((m) => !/(embedding|moderation|rerank|image-generation|transcrib|tts|audio|whisper)/i.test(m.id))
+    .slice(0, limit)
+    .map((m) => ({
+      id: `${prefix}${m.id}`,
+      provider,
+      displayName: m.name || m.id,
+      capabilities: modelCapabilities(m),
+      contextWindow: modelContext(m),
+      status: 'active' as const,
+      description: `Live model discovered from ${provider}. Exact provider routing is enforced.`,
+    }));
+}
+
+app.get('/api/models', async (_req: Request, res: Response) => {
+  const models: ModelInfo[] = [];
+
+  if (ServerConfig.geminiKeys.length > 0) {
+    models.push(
+      {
+        id: 'gemini-3.8-flash',
+        provider: 'Google',
+        displayName: 'Gemini 3.8 Flash',
+        capabilities: ['text', 'vision', 'code', 'reasoning', 'search', 'fast'],
+        contextWindow: 1048576,
+        status: 'active',
+        isDefault: true,
+        description: 'Current stable Gemini Flash model for multimodal and coding workloads.',
+      },
+      {
+        id: 'gemini-2.5-flash',
+        provider: 'Google',
+        displayName: 'Gemini 2.5 Flash',
+        capabilities: ['text', 'vision', 'code', 'reasoning', 'search', 'fast'],
+        contextWindow: 1048576,
+        status: 'active',
+        description: 'Stable multimodal reasoning model for high-volume workloads.',
+      },
+      {
+        id: 'gemini-2.5-pro',
+        provider: 'Google',
+        displayName: 'Gemini 2.5 Pro',
+        capabilities: ['text', 'vision', 'code', 'reasoning', 'search'],
+        contextWindow: 1048576,
+        status: 'active',
+        description: 'Stable reasoning model for complex coding and analysis.',
+      },
+    );
+  }
+
+  models.push(...mapCatalog(
+    'OpenAI',
+    await listOpenAICompatibleModels('https://api.openai.com/v1/models', ServerConfig.openAIKeys),
+    '',
+    40,
+  ).filter((m) => /^(gpt-|o[134](?:-|$))/i.test(m.id) && !/(audio|realtime|transcrib|search-preview|image|moderation)/i.test(m.id)));
+
+  models.push(...mapCatalog(
+    'OpenRouter',
+    await listOpenAICompatibleModels('https://openrouter.ai/api/v1/models', ServerConfig.openRouterKeys, {
+      'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER || 'https://lxai1.vercel.app',
+      'X-Title': 'LX AI'
+    }),
+    'openrouter:',
+    80,
+  ));
+
+  models.push(...mapCatalog(
+    'Groq',
+    await listOpenAICompatibleModels('https://api.groq.com/openai/v1/models', ServerConfig.groqKeys),
+    'groq:',
+    40,
+  ));
+
+  models.push(...mapCatalog(
+    'Mistral',
+    await listOpenAICompatibleModels('https://api.mistral.ai/v1/models', ServerConfig.mistralKeys),
+    'mistral:',
+    40,
+  ));
+
+  models.push(...mapCatalog(
+    'Cerebras',
+    await listOpenAICompatibleModels('https://api.cerebras.ai/v1/models', ServerConfig.cerebrasKeys),
+    'cerebras:',
+    40,
+  ));
+
+  models.push(...mapCatalog(
+    'Hugging Face',
+    await listOpenAICompatibleModels('https://router.huggingface.co/v1/models', ServerConfig.huggingFaceKeys),
+    'huggingface:',
+    60,
+  ));
+
+  const nvidiaPool = Object.values(ServerConfig.nvidiaKeys).filter((v): v is string => Boolean(v));
+  models.push(...mapCatalog(
+    'NVIDIA NIM',
+    await listOpenAICompatibleModels('https://integrate.api.nvidia.com/v1/models', nvidiaPool),
+    'nvidia:',
+    60,
+  ));
+
+  models.push(...mapCatalog(
+    'xKiro',
+    await listOpenAICompatibleModels('https://api.xkiro.com/v1/models', ServerConfig.xKiroKeys),
+    'xkiro:',
+    40,
+  ));
+
+  const unique = Array.from(new Map(models.map((m) => [m.id, m])).values());
+  res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
   res.json({
-    models,
+    models: unique,
     providerStatus: ServerConfig.getProviderStatus(),
+    generatedAt: new Date().toISOString(),
   });
 });
 
