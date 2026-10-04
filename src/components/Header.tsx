@@ -5,13 +5,10 @@ import {
   Mic,
   Sun,
   Moon,
-  Sparkles,
   Sliders,
-  Shield,
   Bell,
   CheckCircle2,
-  X,
-  Download
+  X
 } from 'lucide-react';
 import { PerformanceTier } from '../types';
 
@@ -36,28 +33,6 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [showTierDropdown, setShowTierDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const handleDownloadZip = async () => {
-    setIsDownloading(true);
-    try {
-      const res = await fetch('/api/download/deploy-zip');
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'lxai-vercel-deploy.zip';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      window.open('https://litter.catbox.moe/ydvexc.zip', '_blank');
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
   const tiers: { id: PerformanceTier; label: string; desc: string }[] = [
     { id: 'full', label: 'Full Glass', desc: 'Heavy blur & rich cosmic dynamic lighting' },
     { id: 'balanced', label: 'Balanced', desc: 'Standard production glass & smooth 60fps' },
@@ -66,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <header className="h-14 sm:h-16 shrink-0 px-3 sm:px-5 flex items-center justify-between border-b border-white/8 glass-shell sticky top-0 z-30">
+    <header className="h-14 shrink-0 px-3 sm:px-5 flex items-center justify-between border-b border-white/8 bg-[#090b0e]/92 backdrop-blur-md sticky top-0 z-30">
       {/* Left: Mobile Menu & Search Input */}
       <div className="flex items-center gap-3 flex-1 max-w-xl">
         <button
@@ -94,26 +69,14 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right Controls */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Download Deploy ZIP Button */}
-        <button
-          onClick={handleDownloadZip}
-          disabled={isDownloading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.10] border border-white/10 text-slate-200 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95 group disabled:opacity-50"
-          title="Download complete project ZIP to deploy immediately"
-        >
-          <Download className={`w-3.5 h-3.5 text-cyan-400 group-hover:translate-y-0.5 transition-transform ${isDownloading ? 'animate-bounce' : ''}`} />
-          <span className="hidden md:inline">{isDownloading ? 'Downloading...' : 'Deploy ZIP'}</span>
-        </button>
-
         {/* Quick Voice Partner Action Button */}
         <button
           onClick={onOpenVoicePartner}
-          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 hover:text-white text-xs font-medium shadow-sm transition-all cursor-pointer active:scale-95 group"
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.035] hover:bg-white/[0.06] border border-white/9 text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
           title="Start real-time voice conversation partner"
         >
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
           </span>
           <Mic className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
           <span className="hidden sm:inline">Voice Partner</span>
@@ -123,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="relative">
           <button
             onClick={() => setShowTierDropdown(!showTierDropdown)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.035] border border-white/9 hover:bg-white/[0.06] text-slate-300 text-xs font-medium transition-colors cursor-pointer"
             title="Dynamic Glass Performance Tier"
           >
             <Sliders className="w-3.5 h-3.5 text-cyan-400" />
@@ -164,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Theme Toggle */}
         <button
           onClick={onToggleTheme}
-          className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+          className="p-2 rounded-lg bg-white/[0.035] border border-white/9 hover:bg-white/[0.06] text-slate-300 hover:text-white transition-colors cursor-pointer"
           title={`Theme: ${theme}`}
         >
           {theme === 'cosmic' ? <Moon className="w-4 h-4 text-cyan-300" /> : <Sun className="w-4 h-4 text-amber-300" />}
