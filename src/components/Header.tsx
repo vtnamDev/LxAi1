@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <header className="h-16 px-4 md:px-6 flex items-center justify-between border-b border-white/10 glass-shell sticky top-0 z-30">
+    <header className="h-14 sm:h-16 shrink-0 px-3 sm:px-5 flex items-center justify-between border-b border-white/8 glass-shell sticky top-0 z-30">
       {/* Left: Mobile Menu & Search Input */}
       <div className="flex items-center gap-3 flex-1 max-w-xl">
         <button
@@ -80,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Global Search trigger bar */}
         <button
           onClick={onOpenSearch}
-          className="flex-1 max-w-md flex items-center justify-between px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-500/40 text-slate-400 hover:text-slate-200 transition-all text-xs cursor-pointer group"
+          className="flex-1 max-w-[22rem] flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.025] border border-white/8 hover:bg-white/[0.05] hover:border-white/12 text-slate-500 hover:text-slate-200 transition-all text-xs cursor-pointer group"
         >
           <div className="flex items-center gap-2">
             <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-400 transition-colors" />
@@ -108,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Quick Voice Partner Action Button */}
         <button
           onClick={onOpenVoicePartner}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 hover:text-white text-xs font-medium shadow-sm transition-all cursor-pointer active:scale-95 group"
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 hover:text-white text-xs font-medium shadow-sm transition-all cursor-pointer active:scale-95 group"
           title="Start real-time voice conversation partner"
         >
           <span className="relative flex h-2 w-2">
