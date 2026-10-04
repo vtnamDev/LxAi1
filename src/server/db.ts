@@ -89,7 +89,9 @@ interface DatabaseSchema {
   telegramLinks: Record<string, string>; // chatId -> userId
 }
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
+const DATA_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'lxai-data')
+  : path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 export class Database {
