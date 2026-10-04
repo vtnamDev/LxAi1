@@ -7,6 +7,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { hasAuthDatabase, upsertUser as upsertUserInDatabase, createSession as createDbSession, validateSession as validateDbSession, revokeSession as revokeDbSession } from './auth-db';
+import { createSignedSession, verifySignedSession } from './auth-session';
 
 export interface User {
   id: string;
@@ -145,27 +147,12 @@ export class Database {
   }
 
   // ---------------- USER & SESSIONS ----------------
-  static createOrGetGoogleUser(googleSub: string, email: string, name: string, avatarUrl?: string): User {
+  static async createOrGetGoogleUser(googleSub: string, email: string, name: string, avatarUrl?: string): Promise<User> {
     this.init();
 
-    const bySub = Object.values(this.instance.users).find((u) => u.googleSub === googleSub);
-    if (bySub) return bySub;
-
     const normalizedEmail = email.toLowerCase();
-    const byEmail = Object.values(this.instance.users).find((u) => u.email.toLowerCase() === normalizedEmail);
-
-    if (byEmail) {
-      byEmail.googleSub = googleSub;
-      byEmail.provider = 'google';
-      if (name.trim()) byEmail.name = name.trim();
-      if (avatarUrl) byEmail.avatarUrl = avatarUrl;
-      this.save();
-      return byEmail;
-    }
-
-    const id = `usr_${crypto.randomBytes(8).toString('hex')}`;
-    const user: User = {
-      id,
+    const candidate: User = {
+      id: `usr_${crypto.randomBytes(8).toString('hex')}`,
       email: normalizedEmail,
       name: name.trim() || normalizedEmail.split('@')[0],
       avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(normalizedEmail)}`,
@@ -175,9 +162,43 @@ export class Database {
       createdAt: new Date().toISOString(),
     };
 
-    this.instance.users[id] = user;
-    this.instance.quotas[id] = {
-      userId: id,
+    if (hasAuthDatabase()) {
+      try {
+        const persisted = await upsertUserInDatabase(candidate);
+        this.instance.users[persisted.id] = persisted;
+        this.instance.quotas[persisted.id] = this.instance.quotas[persisted.id] || {
+          userId: persisted.id,
+          usedTokens: 0,
+          limitTokens: 70000,
+          exhaustedAt: null,
+          cooldownMs: 3600000,
+          hasFree24h: false,
+          free24hExpiresAt: null,
+          redeemedVouchers: [],
+        };
+        this.save();
+        return persisted;
+      } catch (error) {
+        console.error('[DB] Persistent Google user write failed; using local fallback:', error);
+      }
+    }
+
+    const bySub = Object.values(this.instance.users).find((u) => u.googleSub === googleSub);
+    if (bySub) return bySub;
+
+    const byEmail = Object.values(this.instance.users).find((u) => u.email.toLowerCase() === normalizedEmail);
+    if (byEmail) {
+      byEmail.googleSub = googleSub;
+      byEmail.provider = 'google';
+      if (name.trim()) byEmail.name = name.trim();
+      if (avatarUrl) byEmail.avatarUrl = avatarUrl;
+      this.save();
+      return byEmail;
+    }
+
+    this.instance.users[candidate.id] = candidate;
+    this.instance.quotas[candidate.id] = {
+      userId: candidate.id,
       usedTokens: 0,
       limitTokens: 70000,
       exhaustedAt: null,
@@ -187,20 +208,18 @@ export class Database {
       redeemedVouchers: [],
     };
     this.save();
-    return user;
+    return candidate;
   }
 
-  static createOrGetUser(email: string, name: string, provider: 'google' | 'email' | 'guest', avatarUrl?: string): User {
+  static async createOrGetUser(email: string, name: string, provider: 'google' | 'email' | 'guest', avatarUrl?: string): Promise<User> {
     this.init();
-    const existing = Object.values(this.instance.users).find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (existing) {
-      return existing;
-    }
+    const normalizedEmail = email.toLowerCase();
+    const existing = Object.values(this.instance.users).find((u) => u.email.toLowerCase() === normalizedEmail);
+    if (existing) return existing;
 
-    const id = `usr_${crypto.randomBytes(8).toString('hex')}`;
     const user: User = {
-      id,
-      email: email.toLowerCase(),
+      id: `usr_${crypto.randomBytes(8).toString('hex')}`,
+      email: normalizedEmail,
       name,
       avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`,
       provider,
@@ -208,11 +227,30 @@ export class Database {
       createdAt: new Date().toISOString(),
     };
 
-    this.instance.users[id] = user;
+    if (hasAuthDatabase()) {
+      try {
+        const persisted = await upsertUserInDatabase(user);
+        this.instance.users[persisted.id] = persisted;
+        this.instance.quotas[persisted.id] = this.instance.quotas[persisted.id] || {
+          userId: persisted.id,
+          usedTokens: 0,
+          limitTokens: 70000,
+          exhaustedAt: null,
+          cooldownMs: 3600000,
+          hasFree24h: false,
+          free24hExpiresAt: null,
+          redeemedVouchers: [],
+        };
+        this.save();
+        return persisted;
+      } catch (error) {
+        console.error('[DB] Persistent user write failed; using local fallback:', error);
+      }
+    }
 
-    // Initialize per-user quota
-    this.instance.quotas[id] = {
-      userId: id,
+    this.instance.users[user.id] = user;
+    this.instance.quotas[user.id] = {
+      userId: user.id,
       usedTokens: 0,
       limitTokens: 70000,
       exhaustedAt: null,
@@ -221,28 +259,47 @@ export class Database {
       free24hExpiresAt: null,
       redeemedVouchers: [],
     };
-
     this.save();
     return user;
   }
 
-  static createSession(userId: string): string {
+  static async createSession(userId: string): Promise<string> {
     this.init();
-    const token = crypto.randomBytes(32).toString('hex');
-    const session: Session = {
-      token,
-      userId,
-      expiresAt: Date.now() + 30 * 24 * 3600 * 1000, // 30 days
-      createdAt: new Date().toISOString(),
-    };
-    this.instance.sessions[token] = session;
-    this.save();
-    return token;
+    const user = this.instance.users[userId];
+    if (!user) throw new Error('Cannot create a session for an unknown user.');
+
+    const expiresAt = Date.now() + 30 * 24 * 3600 * 1000;
+
+    if (hasAuthDatabase()) {
+      const token = crypto.randomBytes(32).toString('hex');
+      try {
+        await createDbSession(token, userId, expiresAt);
+        return token;
+      } catch (error) {
+        console.error('[DB] Persistent session write failed; using signed-session fallback:', error);
+      }
+    }
+
+    return createSignedSession(user, expiresAt);
   }
 
-  static validateSession(token?: string | null): User | null {
+  static async validateSession(token?: string | null): Promise<User | null> {
     if (!token) return null;
     this.init();
+
+    if (hasAuthDatabase()) {
+      try {
+        const dbUser = await validateDbSession(token);
+        if (dbUser) return dbUser;
+      } catch (error) {
+        console.error('[DB] Persistent session validation failed:', error);
+      }
+    }
+
+    const signedUser = verifySignedSession(token);
+    if (signedUser) return signedUser;
+
+    // Legacy local session fallback for tokens created by earlier deployments.
     const session = this.instance.sessions[token];
     if (!session) return null;
 
@@ -255,8 +312,15 @@ export class Database {
     return this.instance.users[session.userId] || null;
   }
 
-  static deleteSession(token: string): void {
+  static async deleteSession(token: string): Promise<void> {
     this.init();
+    if (hasAuthDatabase()) {
+      try {
+        await revokeDbSession(token);
+      } catch (error) {
+        console.error('[DB] Persistent session revoke failed:', error);
+      }
+    }
     delete this.instance.sessions[token];
     this.save();
   }

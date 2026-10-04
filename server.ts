@@ -47,26 +47,36 @@ function getSessionToken(req: Request): string | null {
   return null;
 }
 
-function requireAuth(req: Request, res: Response, next: NextFunction) {
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const token = getSessionToken(req);
-  const user = Database.validateSession(token);
-  if (!user) {
-    return res.status(401).json({
-      error: 'Authentication required. Please sign in.',
-      code: 'AUTH_REQUIRED',
+  try {
+    const user = await Database.validateSession(token);
+    if (!user) {
+      return res.status(401).json({
+        error: 'Authentication required. Please sign in.',
+        code: 'AUTH_REQUIRED',
+      });
+    }
+    (req as any).user = user;
+    next();
+  } catch (error) {
+    console.error('[AUTH_VALIDATE_ERROR]', error);
+    return res.status(503).json({
+      error: 'Authentication storage is temporarily unavailable.',
+      code: 'AUTH_STORAGE_UNAVAILABLE',
     });
   }
-  (req as any).user = user;
-  next();
 }
 
-function optionalAuth(req: Request, res: Response, next: NextFunction) {
+async function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const token = getSessionToken(req);
-  const user = Database.validateSession(token);
-  if (user) {
-    (req as any).user = user;
+  try {
+    const user = await Database.validateSession(token);
+    if (user) (req as any).user = user;
+    next();
+  } catch {
+    next();
   }
-  next();
 }
 
 // -------------------------------------------------------------
@@ -127,14 +137,14 @@ app.post('/api/auth/google', async (req: Request, res: Response) => {
       });
     }
 
-    const user = Database.createOrGetGoogleUser(
+    const user = await Database.createOrGetGoogleUser(
       payload.sub,
       payload.email,
       payload.name || payload.email.split('@')[0],
       payload.picture
     );
 
-    const sessionToken = Database.createSession(user.id);
+    const sessionToken = await Database.createSession(user.id);
     const quota = Database.getQuota(user.id);
 
     return res.json({
@@ -160,10 +170,10 @@ app.post('/api/auth/google', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/auth/guest', (_req: Request, res: Response) => {
+app.post('/api/auth/guest', async (_req: Request, res: Response) => {
   const guestEmail = `guest_${Date.now()}_${crypto.randomBytes(4).toString('hex')}@lxai.space`;
-  const user = Database.createOrGetUser(guestEmail, 'Guest Developer', 'guest');
-  const sessionToken = Database.createSession(user.id);
+  const user = await Database.createOrGetUser(guestEmail, 'Guest Developer', 'guest');
+  const sessionToken = await Database.createSession(user.id);
   const quota = Database.getQuota(user.id);
   return res.json({
     user,
@@ -178,10 +188,10 @@ app.post('/api/auth/guest', (_req: Request, res: Response) => {
   });
 });
 
-app.post('/api/auth/logout', (req: Request, res: Response) => {
+app.post('/api/auth/logout', async (req: Request, res: Response) => {
   const token = getSessionToken(req);
   if (token) {
-    Database.deleteSession(token);
+    await Database.deleteSession(token);
   }
   res.json({ success: true });
 });
@@ -820,7 +830,7 @@ wss.on('connection', async (clientWs: WebSocket, req: http.IncomingMessage) => {
   // Extract token from query string ?token=...
   const url = new URL(req.url || '', `http://${req.headers.host}`);
   const token = url.searchParams.get('token');
-  const user = Database.validateSession(token);
+  const user = await Database.validateSession(token);
 
   if (!user) {
     clientWs.close(4401, 'Authentication Required');
