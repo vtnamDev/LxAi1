@@ -77,6 +77,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }));
   };
 
+  const updateGlass = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty('--glass-x', String(Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)) + '%'));
+    el.style.setProperty('--glass-y', String(Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) + '%'));
+  };
+
   // Helper to render markdown and code blocks safely
   const renderMessageContent = (content: string, msgId: string) => {
     const parts = content.split(/(```[\s\S]*?```)/g);
@@ -266,8 +274,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Floating Bottom Composer */}
-      <div className="p-4 md:px-8 border-t border-white/10 glass-shell">
-        <div className="max-w-4xl mx-auto rounded-3xl glass-card border border-white/15 p-3 shadow-2xl space-y-2">
+      <div className="p-3 sm:p-4 md:px-8 border-t border-white/8 glass-shell">
+        <div
+          className="dynamic-glass glass-elevated max-w-4xl mx-auto rounded-[26px] border border-white/12 p-3 shadow-2xl space-y-2"
+          onPointerMove={updateGlass}
+        >
           {/* Controls Bar */}
           <div className="flex items-center justify-between text-xs pb-1.5 border-b border-white/10">
             <div className="flex items-center gap-1.5">
