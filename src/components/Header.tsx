@@ -194,9 +194,9 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                 <div className="p-2.5 rounded-xl bg-white/5 text-xs">
-                  <div className="text-cyan-300 font-medium">Gemini 3.8 Live API Active</div>
+                  <div className="text-cyan-300 font-medium">Groq Default Route Active</div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    Real-time duplex conversational voice partner is configured and ready.
+                    GPT OSS 20B on Groq is the default chat route and live model catalog is enabled.
                   </div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-white/5 text-xs">
