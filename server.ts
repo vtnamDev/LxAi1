@@ -299,7 +299,13 @@ async function listOpenAICompatibleModels(
 
 function mapCatalog(provider: string, items: CatalogModel[], prefix: string, limit = 80): ModelInfo[] {
   return items
-    .filter((m) => !/(embedding|moderation|rerank|image-generation|transcrib|tts|audio|whisper)/i.test(m.id))
+    .filter((m) => {
+      const inputs = m.architecture?.input_modalities || [];
+      const outputs = m.architecture?.output_modalities || [];
+      return (!inputs.length || inputs.includes('text'))
+        && (!outputs.length || outputs.includes('text'))
+        && !/(embedding|moderation|rerank|image-generation|transcrib|tts|audio|whisper)/i.test(m.id);
+    })
     .slice(0, limit)
     .map((m) => ({
       id: `${prefix}${m.id}`,
@@ -335,7 +341,10 @@ app.get('/api/models', async (_req: Request, res: Response) => {
     await listOpenAICompatibleModels('https://api.openai.com/v1/models', ServerConfig.openAIKeys),
     '',
     40,
-  ).filter((m) => /^(gpt-|o[134](?:-|$))/i.test(m.id) && !/(audio|realtime|transcrib|search-preview|image|moderation)/i.test(m.id)));
+  ).filter((m) =>
+    /^(gpt-|o[134](?:-|$))/i.test(m.id)
+    && !/(audio|realtime|transcrib|search-preview|image|moderation|codex|pro)/i.test(m.id)
+  ));
 
   models.push(...mapCatalog(
     'OpenRouter',
