@@ -874,4 +874,10 @@ async function setupVite() {
   });
 }
 
-setupVite();
+export default app;
+
+// Vercel imports the Express application as a serverless function.
+// The local listener/Vite middleware must not start inside a Vercel invocation.
+if (!process.env.VERCEL) {
+  setupVite();
+}
