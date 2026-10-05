@@ -1,15 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Menu,
-  Search,
-  Mic,
-  Sun,
-  Moon,
-  Sliders,
-  Bell,
-  CheckCircle2,
-  X
-} from 'lucide-react';
+import { Menu, Search, Mic, Sliders, Bell, CheckCircle2, X, MoreHorizontal } from 'lucide-react';
 import { PerformanceTier } from '../types';
 
 interface HeaderProps {
@@ -28,95 +18,77 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSearch,
   tier,
   onChangeTier,
-  theme,
-  onToggleTheme,
+  theme: _theme,
+  onToggleTheme: _onToggleTheme,
 }) => {
   const [showTierDropdown, setShowTierDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+
   const tiers: { id: PerformanceTier; label: string; desc: string }[] = [
-    { id: 'full', label: 'Full Glass', desc: 'Heavy blur & rich cosmic dynamic lighting' },
-    { id: 'balanced', label: 'Balanced', desc: 'Standard production glass & smooth 60fps' },
-    { id: 'lite', label: 'Lite Mode', desc: 'Low blur, high surface opacity for battery' },
-    { id: 'minimal', label: 'Minimal', desc: 'Zero blur, solid high-contrast borders' },
+    { id: 'full', label: 'Full Glass', desc: 'Rich blur & lighting' },
+    { id: 'balanced', label: 'Balanced', desc: 'Production default' },
+    { id: 'lite', label: 'Lite', desc: 'Lower GPU / battery' },
+    { id: 'minimal', label: 'Minimal', desc: 'Maximum clarity' },
   ];
 
   return (
-    <header className="glass-shell h-14 shrink-0 px-3 sm:px-5 flex items-center justify-between border-0 border-b border-white/10 sticky top-0 z-30">
-      {/* Left: Mobile Menu & Search Input */}
-      <div className="flex items-center gap-3 flex-1 max-w-xl">
-        <button
-          onClick={onToggleMobileMenu}
-          className="p-2 rounded-full text-slate-300 hover:text-white hover:bg-white/10 lg:hidden cursor-pointer"
-          aria-label="Toggle menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+    <header className="glass-shell relative z-30 flex h-14 shrink-0 items-center gap-2 border-0 border-b border-white/10 px-2.5 sm:px-4">
+      <button
+        type="button"
+        onClick={onToggleMobileMenu}
+        className="higgs-control flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-slate-200 lg:hidden"
+        aria-label="Open navigation"
+      >
+        <Menu className="h-4.5 w-4.5" />
+      </button>
 
-        {/* Global Search trigger bar */}
-        <button
-          onClick={onOpenSearch}
-          className="higgs-control flex-1 max-w-[22rem] flex items-center justify-between px-3 py-2 rounded-full border text-slate-500 hover:text-slate-100 transition-all text-xs cursor-pointer group"
-        >
-          <div className="flex items-center gap-2">
-            <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-400 transition-colors" />
-            <span className="truncate">Search chats, models, files...</span>
-          </div>
-          <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-slate-300 font-mono">
-            ⌘K
-          </kbd>
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onOpenSearch}
+        className="higgs-control flex min-w-0 flex-1 items-center gap-2 rounded-full border px-3 py-2 text-left text-xs text-slate-500 hover:text-slate-100 sm:max-w-sm"
+      >
+        <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        <span className="min-w-0 flex-1 truncate">Search chats, files, models…</span>
+        <kbd className="hidden rounded bg-white/7 px-1.5 py-0.5 font-mono text-[9px] text-slate-400 sm:inline">⌘K</kbd>
+      </button>
 
-      {/* Right Controls */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Quick Voice Partner Action Button */}
+      <div className="ml-auto flex items-center gap-1.5">
         <button
+          type="button"
           onClick={onOpenVoicePartner}
-          className="higgs-control hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border text-slate-200 hover:text-white text-xs font-medium transition-all cursor-pointer"
-          title="Start real-time voice conversation partner"
+          className="higgs-control hidden h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold text-slate-200 sm:flex"
         >
-          <span className="relative flex h-2 w-2">
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-          </span>
-          <Mic className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-          <span className="hidden sm:inline">Voice Partner</span>
+          <Mic className="h-3.5 w-3.5 text-cyan-200" />
+          Voice
         </button>
 
-        {/* Performance Tier Selector */}
-        <div className="relative">
+        <div className="relative hidden md:block">
           <button
-            onClick={() => setShowTierDropdown(!showTierDropdown)}
-            className="higgs-control flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-slate-200 text-xs font-medium transition-colors cursor-pointer"
-            title="Dynamic Glass Performance Tier"
+            type="button"
+            onClick={() => setShowTierDropdown((value) => !value)}
+            className="higgs-control flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold text-slate-200"
+            title="Performance"
           >
-            <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="capitalize hidden md:inline">{tier}</span>
+            <Sliders className="h-3.5 w-3.5 text-violet-200" />
+            <span className="capitalize">{tier}</span>
           </button>
-
           {showTierDropdown && (
-            <div className="absolute right-0 mt-2 w-64 p-2 rounded-2xl glass-modal shadow-2xl z-50 animate-in fade-in zoom-in-95">
-              <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">
-                Dynamic Glass Tier
-              </div>
-              <div className="space-y-1 mt-1">
-                {tiers.map((t) => (
+            <div className="glass-modal absolute right-0 mt-2 w-64 rounded-2xl p-2 shadow-2xl">
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Visual performance</div>
+              <div className="mt-1 space-y-1">
+                {tiers.map((item) => (
                   <button
-                    key={t.id}
-                    onClick={() => {
-                      onChangeTier(t.id);
-                      setShowTierDropdown(false);
-                    }}
-                    className={`w-full text-left p-2 rounded-xl text-xs flex items-start justify-between cursor-pointer transition-colors ${
-                      tier === t.id
-                        ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/30'
-                        : 'text-slate-300 hover:bg-white/5'
-                    }`}
+                    key={item.id}
+                    type="button"
+                    onClick={() => { onChangeTier(item.id); setShowTierDropdown(false); }}
+                    className={[\"w-full rounded-xl p-2 text-left transition\", tier === item.id ? \"bg-white/10 text-white\" : \"text-slate-400 hover:bg-white/5 hover:text-white\"].join(' ')}
                   >
-                    <div>
-                      <div className="font-medium capitalize">{t.label}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{t.desc}</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold">{item.label}</span>
+                      {tier === item.id && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />}
                     </div>
-                    {tier === t.id && <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />}
+                    <div className="mt-0.5 text-[10px] text-slate-600">{item.desc}</div>
                   </button>
                 ))}
               </div>
@@ -124,54 +96,45 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Theme Toggle */}
         <button
-          onClick={onToggleTheme}
-          className="higgs-control p-2 rounded-full border text-slate-200 hover:text-white transition-colors cursor-pointer"
-          title={`Theme: ${theme}`}
+          type="button"
+          onClick={() => setShowNotifications((value) => !value)}
+          className="higgs-control relative flex h-9 w-9 items-center justify-center rounded-full border text-slate-200"
+          aria-label="Notifications"
         >
-          {theme === 'cosmic' ? <Moon className="w-4 h-4 text-cyan-300" /> : <Sun className="w-4 h-4 text-amber-300" />}
+          <Bell className="h-4 w-4" />
+          <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan-300" />
         </button>
 
-        {/* Notifications Icon */}
         <div className="relative">
           <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="higgs-control p-2 rounded-full border text-slate-200 hover:text-white transition-colors relative cursor-pointer"
-            title="Notifications"
+            type="button"
+            onClick={() => setShowMore((value) => !value)}
+            className="higgs-control flex h-9 w-9 items-center justify-center rounded-full border text-slate-200 md:hidden"
+            aria-label="More"
           >
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-cyan-400" />
+            <MoreHorizontal className="h-4 w-4" />
           </button>
-
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 p-3 rounded-2xl glass-modal shadow-2xl z-50 animate-in fade-in zoom-in-95">
-              <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                <span className="text-xs font-semibold text-white">Notifications</span>
-                <button
-                  onClick={() => setShowNotifications(false)}
-                  className="text-slate-400 hover:text-white p-1"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
-                <div className="p-2.5 rounded-xl bg-white/5 text-xs">
-                  <div className="text-cyan-300 font-medium">Groq Default Route Active</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    GPT OSS 20B on Groq is the default chat route and live model catalog is enabled.
-                  </div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white/5 text-xs">
-                  <div className="text-emerald-300 font-medium">70,000 Free Quota Ready</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    Your hourly token limit is initialized. Redeem voucher for 24h unlimited access.
-                  </div>
-                </div>
-              </div>
+          {showMore && (
+            <div className="glass-modal absolute right-0 mt-2 w-52 rounded-2xl p-2 shadow-2xl">
+              <button type="button" onClick={onOpenVoicePartner} className="w-full rounded-xl px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/6">Voice Partner</button>
+              <button type="button" onClick={() => setShowTierDropdown((value) => !value)} className="w-full rounded-xl px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/6">Performance: {tier}</button>
+              <button type="button" onClick={_onToggleTheme} className="w-full rounded-xl px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/6">Toggle theme</button>
             </div>
           )}
         </div>
+
+        {showNotifications && (
+          <div className="glass-modal absolute right-2 top-14 w-[min(20rem,calc(100vw-1rem))] rounded-2xl p-3 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/8 pb-2">
+              <span className="text-xs font-semibold text-white">Notifications</span>
+              <button type="button" onClick={() => setShowNotifications(false)} className="rounded-full p-1 text-slate-500 hover:bg-white/6 hover:text-white"><X className="h-3.5 w-3.5" /></button>
+            </div>
+            <div className="mt-2 rounded-xl bg-white/4 p-2.5 text-xs text-slate-400">
+              LX AI security, model routing and agent features are shown here when they need attention.
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );
