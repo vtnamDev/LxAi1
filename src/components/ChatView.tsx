@@ -271,6 +271,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
           {conversation?.messages.map((msg) => {
             const isAssistant = msg.role === 'assistant';
+            const latestAssistantId = [...conversation.messages].reverse().find((message) => message.role === 'assistant')?.id;
+            const canRegenerate = isAssistant && msg.id === latestAssistantId;
             const reasoningOpen = expandedReasoningIds[msg.id];
 
             return (
@@ -318,9 +320,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         <button type="button" onClick={() => navigator.clipboard?.writeText(msg.content)} className="rounded-full border border-white/8 bg-white/[0.02] p-1.5 transition hover:bg-white/[0.06] hover:text-white" title="Copy answer">
                           <Copy className="h-3 w-3" />
                         </button>
-                        <button type="button" onClick={() => onRegenerate(msg.id)} className="rounded-full border border-white/8 bg-white/[0.02] px-2 py-1 text-[10px] transition hover:bg-white/[0.06] hover:text-white" title="Regenerate">
-                          Regenerate
-                        </button>
+                        {canRegenerate && (
+                          <button type="button" onClick={() => onRegenerate(msg.id)} className="rounded-full border border-white/8 bg-white/[0.02] px-2 py-1 text-[10px] transition hover:bg-white/[0.06] hover:text-white" title="Regenerate">
+                            Regenerate
+                          </button>
+                        )}
                       </span>
                     </div>
                   )}
