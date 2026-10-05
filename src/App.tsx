@@ -28,6 +28,7 @@ import { VoicePartnerModal } from './components/VoicePartnerModal';
 import { ModelSelectorModal } from './components/ModelSelectorModal';
 import { TelegramModal } from './components/TelegramModal';
 import { SettingsModal } from './components/SettingsModal';
+import { GlobalSearchModal } from './components/GlobalSearchModal';
 
 const DEFAULT_GROQ_MODEL: ModelInfo = {
   id: 'groq:openai/gpt-oss-20b',
@@ -87,6 +88,7 @@ export default function App() {
   // Modal states
   const [isVoicePartnerOpen, setIsVoicePartnerOpen] = useState(false);
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [isTelegramOpen, setIsTelegramOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -218,7 +220,7 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setIsModelSelectorOpen(true);
+        setIsGlobalSearchOpen(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -626,7 +628,7 @@ export default function App() {
         <Header
           onToggleMobileMenu={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           onOpenVoicePartner={() => setIsVoicePartnerOpen(true)}
-          onOpenSearch={() => setIsModelSelectorOpen(true)}
+          onOpenSearch={() => setIsGlobalSearchOpen(true)}
           tier={tier}
           onChangeTier={setTier}
           theme={theme}
@@ -688,6 +690,21 @@ export default function App() {
       </div>
 
       {/* Modals & Dialogs */}
+      <GlobalSearchModal
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        conversations={conversations}
+        models={models}
+        onSelectConversation={handleSelectConversation}
+        onSelectModel={(id) => {
+          const found = models.find((m) => m.id === id);
+          if (found) {
+            setSelectedModel(found);
+            try { localStorage.setItem('lx_selected_model', found.id); } catch {}
+          }
+        }}
+      />
+
       <VoicePartnerModal
         isOpen={isVoicePartnerOpen}
         onClose={() => setIsVoicePartnerOpen(false)}
