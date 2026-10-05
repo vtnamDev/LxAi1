@@ -80,6 +80,89 @@ async function optionalAuth(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+type TurnstileValidation = {
+  ok: boolean;
+  unavailable?: boolean;
+  errorCodes?: string[];
+};
+
+async function verifyTurnstile(req: Request, token: unknown, expectedAction: string): Promise<TurnstileValidation> {
+  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
+  if (!secret) return { ok: true };
+
+  if (typeof token !== 'string' || !token.trim() || token.length > 2048) {
+    return { ok: false, errorCodes: ['missing-input-response'] };
+  }
+
+  const form = new URLSearchParams({
+    secret,
+    response: token,
+  });
+
+  const forwarded = String(req.headers['x-forwarded-for'] || '')
+    .split(',')[0]
+    .trim();
+  if (forwarded) form.set('remoteip', forwarded);
+
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) {
+      console.error('[TURNSTILE_VERIFY_HTTP_ERROR]', response.status);
+      return { ok: false, unavailable: true };
+    }
+
+    const data: any = await response.json();
+    const actionValid = data?.action === expectedAction;
+    const hostnameAllowList = (process.env.TURNSTILE_ALLOWED_HOSTNAMES || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const hostnameValid = hostnameAllowList.length === 0 || hostnameAllowList.includes(String(data?.hostname || ''));
+
+    if (!data?.success || !actionValid || !hostnameValid) {
+      return {
+        ok: false,
+        errorCodes: Array.isArray(data?.['error-codes']) ? data['error-codes'] : ['turnstile-validation-failed'],
+      };
+    }
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error('[TURNSTILE_VERIFY_ERROR]', error?.message || error);
+    return { ok: false, unavailable: true };
+  }
+}
+
+async function requireTurnstile(req: Request, res: Response, token: unknown, action: string): Promise<boolean> {
+  const result = await verifyTurnstile(req, token, action);
+  if (result.ok) return true;
+
+  if (result.unavailable) {
+    res.status(503).json({
+      error: 'Bot verification service is temporarily unavailable. Please retry.',
+      code: 'TURNSTILE_UNAVAILABLE',
+    });
+    return false;
+  }
+
+  console.warn('[TURNSTILE_REJECTED]', {
+    path: req.path,
+    action,
+    errors: result.errorCodes,
+  });
+  res.status(403).json({
+    error: 'Bot verification failed. Please retry the verification.',
+    code: 'TURNSTILE_REQUIRED',
+  });
+  return false;
+}
+
 // -------------------------------------------------------------
 // 1. Authentication Endpoints
 // -------------------------------------------------------------
@@ -100,7 +183,7 @@ app.get('/api/auth/google/config', (_req: Request, res: Response) => {
 });
 
 app.post('/api/auth/google', async (req: Request, res: Response) => {
-  const { credential } = req.body;
+  const { credential, turnstileToken } = req.body;
 
   if (!ServerConfig.googleClientId) {
     return res.status(503).json({
@@ -108,6 +191,8 @@ app.post('/api/auth/google', async (req: Request, res: Response) => {
       code: 'GOOGLE_AUTH_NOT_CONFIGURED',
     });
   }
+
+  if (!(await requireTurnstile(req, res, turnstileToken, 'auth'))) return;
 
   if (!credential || typeof credential !== 'string' || credential.length > 10000) {
     return res.status(400).json({
@@ -171,7 +256,10 @@ app.post('/api/auth/google', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/auth/guest', async (_req: Request, res: Response) => {
+app.post('/api/auth/guest', async (req: Request, res: Response) => {
+  const { turnstileToken } = req.body || {};
+  if (!(await requireTurnstile(req, res, turnstileToken, 'auth'))) return;
+
   const guestEmail = `guest_${Date.now()}_${crypto.randomBytes(4).toString('hex')}@lxai.space`;
   const user = await Database.createOrGetUser(guestEmail, 'Guest Developer', 'guest');
   const sessionToken = await Database.createSession(user.id);
@@ -559,9 +647,11 @@ app.get('/api/files', requireAuth, (req: Request, res: Response) => {
   res.json({ files: list });
 });
 
-app.post('/api/files/upload', requireAuth, (req: Request, res: Response) => {
+app.post('/api/files/upload', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as User;
-  const { fileName, fileType, base64Data } = req.body;
+  const { fileName, fileType, base64Data, turnstileToken } = req.body;
+
+  if (!(await requireTurnstile(req, res, turnstileToken, 'file-upload'))) return;
 
   if (!fileName || typeof fileName !== 'string') {
     return res.status(400).json({ error: 'File name is required' });
@@ -750,7 +840,9 @@ function formatTavilyContext(sources: TavilySource[]): string {
 // -------------------------------------------------------------
 app.post('/api/chat/stream', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as User;
-  const { messages, modelId = 'gemini-3.8-flash', mode = 'fast', enableSearch, projectContext } = req.body;
+  const { messages, modelId = 'gemini-3.8-flash', mode = 'fast', enableSearch, projectContext, turnstileToken } = req.body;
+
+  if (!(await requireTurnstile(req, res, turnstileToken, 'chat'))) return;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Messages array is required' });
