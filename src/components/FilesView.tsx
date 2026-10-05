@@ -11,6 +11,7 @@ import {
   Plus
 } from 'lucide-react';
 import { Attachment } from '../types';
+import { withTurnstile } from '../lib/turnstile';
 
 interface FilesViewProps {
   onAttachToChat?: (file: Attachment) => void;
@@ -52,34 +53,41 @@ export const FilesView: React.FC<FilesViewProps> = ({ onAttachToChat }) => {
     if (!selectedFiles || selectedFiles.length === 0) return;
 
     setIsUploading(true);
-    const file = selectedFiles[0];
-    const reader = new FileReader();
+    const filesToUpload = Array.from(selectedFiles).slice(0, 8);
 
-    reader.onload = async () => {
-      const base64 = (reader.result as string).split(',')[1];
-      try {
-        const res = await fetch('/api/files/upload', {
-          method: 'POST',
-          headers: getHeaders(),
-          body: JSON.stringify({
-            fileName: file.name,
-            fileType: file.type || 'text/plain',
-            size: file.size,
-            base64Data: base64,
-          }),
+    try {
+      for (const file of filesToUpload) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(reader.error);
+          reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+          reader.readAsDataURL(file);
         });
+
+        const res = await withTurnstile('file-upload', (turnstileToken) =>
+          fetch('/api/files/upload', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({
+              fileName: file.name,
+              fileType: file.type || 'text/plain',
+              size: file.size,
+              base64Data: base64,
+              turnstileToken,
+            }),
+          })
+        );
+
         if (res.ok) {
           const uploaded = await res.json();
           setFiles((prev) => [uploaded, ...prev]);
         }
-      } catch (err) {
-        console.error('File upload failed:', err);
-      } finally {
-        setIsUploading(false);
       }
-    };
-
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('File upload failed:', err);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
