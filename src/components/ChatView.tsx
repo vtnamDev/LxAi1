@@ -15,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Message, Conversation, ModeType, ModelInfo, Attachment } from '../types';
+import { withTurnstile } from '../lib/turnstile';
 
 interface ChatViewProps {
   conversation: Conversation | null;
@@ -189,18 +190,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
           binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
         }
         const base64Data = btoa(binary);
-        const response = await fetch('/api/files/upload', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: 'Bearer ' + token } : {}),
-          },
-          body: JSON.stringify({
-            fileName: file.name,
-            fileType: file.type,
-            base64Data,
+        const response = await withTurnstile('file-upload', (turnstileToken) =>
+          fetch('/api/files/upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: 'Bearer ' + token } : {}),
+            },
+            body: JSON.stringify({
+              fileName: file.name,
+              fileType: file.type,
+              base64Data,
+              turnstileToken,
+            }),
           }),
-        });
+        );
         if (!response.ok) continue;
         const data = await response.json();
         setPendingAttachments((current) => [...current, {
