@@ -138,6 +138,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [expandedReasoningIds, setExpandedReasoningIds] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
     if (!conversation?.mode) return;
@@ -160,14 +162,57 @@ export const ChatView: React.FC<ChatViewProps> = ({
     e.preventDefault();
     const value = inputText.trim();
     if (!value || isStreaming) return;
-    onSendMessage(value, mode, selectedModel.id, searchEnabled);
+    onSendMessage(value, mode, selectedModel.id, searchEnabled, pendingAttachments);
     setInputText('');
+    setPendingAttachments([]);
   };
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard?.writeText(text).catch(() => {});
     setCopiedCodeId(id);
     window.setTimeout(() => setCopiedCodeId(null), 1800);
+  };
+
+  const uploadAttachments = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const token = localStorage.getItem('lx_session_token');
+    const selected = Array.from(files).slice(0, 4);
+
+    for (const file of selected) {
+      try {
+        const buffer = await file.arrayBuffer();
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const chunkSize = 0x8000;
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+        }
+        const base64Data = btoa(binary);
+        const response = await fetch('/api/files/upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: 'Bearer ' + token } : {}),
+          },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: file.type,
+            base64Data,
+          }),
+        });
+        if (!response.ok) continue;
+        const data = await response.json();
+        setPendingAttachments((current) => [...current, {
+          id: data.id,
+          name: data.name,
+          type: data.type,
+          size: data.size,
+          extractedText: data.extractedText,
+          status: 'ready',
+          uploadedAt: data.uploadedAt,
+        }]);
+      } catch {}
+    }
   };
 
   const toggleReasoning = (msgId: string) => {
@@ -268,6 +313,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <div className="mt-3 flex items-center gap-3 text-[10px] text-slate-600">
                       <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       {msg.tokens ? <span>• {msg.tokens} tokens</span> : null}
+                      <span className="ml-auto flex items-center gap-1">
+                        <button type="button" onClick={() => navigator.clipboard?.writeText(msg.content)} className="rounded-full border border-white/8 bg-white/[0.02] p-1.5 transition hover:bg-white/[0.06] hover:text-white" title="Copy answer">
+                          <Copy className="h-3 w-3" />
+                        </button>
+                        <button type="button" onClick={onRegenerate} className="rounded-full border border-white/8 bg-white/[0.02] px-2 py-1 text-[10px] transition hover:bg-white/[0.06] hover:text-white" title="Regenerate">
+                          Regenerate
+                        </button>
+                      </span>
+                    </div>
+                      <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      {msg.tokens ? <span>• {msg.tokens} tokens</span> : null}
                     </div>
                   )}
                 </div>
@@ -293,6 +349,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
             className="border-t border-white/8 pt-2"
           >
             <div className="flex items-center gap-2 px-1 pb-2">
+              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { uploadAttachments(event.target.files); event.currentTarget.value = ''; }} />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-500 transition hover:bg-white/[0.06] hover:text-white"
+                title="Đính kèm tệp"
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={onOpenModelSelector}
@@ -356,6 +421,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </button>
               </div>
             </div>
+
+            {pendingAttachments.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {pendingAttachments.map((attachment) => (
+                  <div key={attachment.id} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/8 bg-white/[0.035] px-2.5 py-1.5 text-[10px] text-slate-300">
+                    <Paperclip className="h-3 w-3 text-cyan-300" />
+                    <span className="max-w-[10rem] truncate">{attachment.name}</span>
+                    <button type="button" onClick={() => setPendingAttachments((items) => items.filter((item) => item.id !== attachment.id))} className="rounded-full p-0.5 text-slate-600 hover:text-white" title="Remove attachment">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <textarea
               value={inputText}
