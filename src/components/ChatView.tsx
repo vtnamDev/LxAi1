@@ -322,9 +322,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         </button>
                       </span>
                     </div>
-                      <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      {msg.tokens ? <span>• {msg.tokens} tokens</span> : null}
-                    </div>
                   )}
                 </div>
               </article>
