@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShieldCheck, Sparkles, UserRound, AlertCircle, LogIn } from 'lucide-react';
 import { UserProfile } from '../types';
+import { withTurnstile } from '../lib/turnstile';
 
 interface AuthScreenProps {
   onLogin: (user: UserProfile, token: string) => void;
@@ -69,11 +70,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
               setProcessing(true);
               setErrorMessage(null);
               try {
-                const res = await fetch('/api/auth/google', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ credential }),
-                });
+                const res = await withTurnstile('auth', (turnstileToken) =>
+                  fetch('/api/auth/google', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ credential, turnstileToken }),
+                  }),
+                );
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || 'Google authentication failed.');
                 localStorage.setItem('lx_session_token', data.sessionToken);
@@ -138,7 +141,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
     setProcessing(true);
     setErrorMessage(null);
     try {
-      const res = await fetch('/api/auth/guest', { method: 'POST' });
+      const res = await withTurnstile('auth', (turnstileToken) =>
+        fetch('/api/auth/guest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ turnstileToken }),
+        }),
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Guest access failed.');
       localStorage.setItem('lx_session_token', data.sessionToken);
