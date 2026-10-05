@@ -140,6 +140,15 @@ Provide articulate, concise, and helpful responses. Format code in markdown code
   }
 }
 
+function stripToolCallMarkup(value: string): string {
+  return value
+    .replace(/<toolcall>[\\s\\S]*?<\\/toolcall>/gi, '')
+    .replace(/<function=[^>]*>/gi, '')
+    .replace(/<\\/function>/gi, '')
+    .replace(/<parameter=[^>]*>/gi, '')
+    .replace(/<\\/parameter>/gi, '');
+}
+
 // Generic OpenAI-compatible streaming helper
 async function* streamOpenAICompatible(
   endpoint: string,
@@ -153,7 +162,7 @@ async function* streamOpenAICompatible(
   let systemMessage = `You are LX AI, an advanced personal AI workspace assistant.`;
   if (params.projectContext) systemMessage += `\n\nContext:\n${params.projectContext}`;
   if (params.webContext) {
-    systemMessage += `\n\nVerified web research from Tavily:\nUse it as grounding. Start with the answer, add "Điểm chính" when useful, use a clean Markdown table for structured or numeric data, and do not print raw URLs or a Sources section unless requested.\n${params.webContext}`;
+    systemMessage += `\n\nVerified web research from Tavily:\nThe LX AI gateway has ALREADY executed web search and supplied the verified results below. Use these results as grounding and answer the user directly. NEVER emit tool-call XML, function-call markup, JSON tool-call syntax, or text such as <toolcall>, <function=...>, <parameter=...>. Do not pretend to call Tavily yourself. Start with the answer, add "Điểm chính" when useful, use a clean Markdown table for structured or numeric data, and do not print raw URLs or a Sources section unless requested.\n${params.webContext}`;
   }
 
   const messages = [
@@ -225,6 +234,7 @@ async function* streamOpenAICompatible(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let toolMarkupBuffer = '';
 
   try {
     while (true) {
@@ -245,7 +255,21 @@ async function* streamOpenAICompatible(
         try {
           const json = JSON.parse(trimmed.slice(6));
           const delta = json.choices?.[0]?.delta;
-          if (delta?.content) yield { text: delta.content };
+          if (delta?.content) {
+            toolMarkupBuffer += String(delta.content);
+
+            // Strip complete tool-call XML blocks even when they span multiple SSE chunks.
+            let safeText = stripToolCallMarkup(toolMarkupBuffer);
+            const partialStart = safeText.lastIndexOf('<toolcall');
+            if (partialStart >= 0 && !safeText.slice(partialStart).includes('</toolcall>')) {
+              const emitBefore = safeText.slice(0, partialStart);
+              toolMarkupBuffer = safeText.slice(partialStart);
+              if (emitBefore) yield { text: emitBefore };
+            } else {
+              toolMarkupBuffer = '';
+              if (safeText) yield { text: safeText };
+            }
+          }
           if (delta?.reasoning_content) yield { reasoningText: delta.reasoning_content };
           if (delta?.reasoning) yield { reasoningText: typeof delta.reasoning === 'string' ? delta.reasoning : JSON.stringify(delta.reasoning) };
           if (json.web_search?.results) {
@@ -257,6 +281,10 @@ async function* streamOpenAICompatible(
       }
     }
   } finally {
+    const tail = stripToolCallMarkup(toolMarkupBuffer);
+    if (tail) {
+      yield { text: tail };
+    }
     reader.releaseLock();
   }
 }
