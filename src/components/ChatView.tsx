@@ -254,243 +254,123 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div
-        ref={feedRef}
-        className="chat-feed min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-6 sm:px-5 md:px-8"
-      >
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-7 pb-5">
-          {(!conversation || conversation.messages.length === 0) && (
-            <div className="flex min-h-full items-center justify-center py-24">
-              <div className="w-full max-w-xl text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.06]">
-                  <Sparkles className="h-5 w-5 text-emerald-300" />
+      <div ref={feedRef} className="chat-feed min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-6 sm:px-5 md:px-8">
+        <div className="mx-auto w-full max-w-4xl pb-8">
+          {(!conversation || conversation.messages.length === 0) ? (
+            <div className="flex min-h-[52vh] items-center justify-center px-4 py-14 text-center">
+              <div className="max-w-xl">
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-200/10 bg-violet-200/6">
+                  <Sparkles className="h-6 w-6 text-violet-200" />
                 </div>
-                <h2 className="text-lg font-semibold tracking-tight text-white">Start a new conversation</h2>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                  Ask a question, write code, research something, or attach a file.
-                </p>
+                <h2 className="text-[clamp(1.8rem,7vw,2.7rem)] font-semibold tracking-[-.045em] text-white">Start a new conversation</h2>
+                <p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-slate-500">Ask a question, attach a file, research something, or switch to AI Coding Agent.</p>
               </div>
             </div>
-          )}
+          ) : (
+            <div className="space-y-8">
+              {conversation.messages.map((msg) => {
+                const isAssistant = msg.role === 'assistant';
+                const latestAssistantId = [...conversation.messages].reverse().find((item) => item.role === 'assistant')?.id;
+                const canRegenerate = isAssistant && msg.id === latestAssistantId;
+                const reasoningOpen = expandedReasoningIds[msg.id];
 
-          {conversation?.messages.map((msg) => {
-            const isAssistant = msg.role === 'assistant';
-            const latestAssistantId = [...conversation.messages].reverse().find((message) => message.role === 'assistant')?.id;
-            const canRegenerate = isAssistant && msg.id === latestAssistantId;
-            const reasoningOpen = expandedReasoningIds[msg.id];
+                return (
+                  <article key={msg.id} className={isAssistant ? 'flex justify-start' : 'flex justify-end'}>
+                    <div className={isAssistant ? 'w-full max-w-[48rem]' : 'max-w-[42rem]'}>
+                      {isAssistant && msg.reasoningContent && (
+                        <div className="mb-3 overflow-hidden rounded-2xl border border-violet-200/10 bg-violet-200/[0.03]">
+                          <button type="button" onClick={() => toggleReasoning(msg.id)} className="flex h-10 w-full items-center justify-between px-3.5 text-xs text-slate-400 hover:bg-white/4 hover:text-white">
+                            <span className="inline-flex items-center gap-2"><Brain className="h-3.5 w-3.5 text-violet-200" /> Reasoning</span>
+                            {reasoningOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          </button>
+                          {reasoningOpen && <div className="max-h-72 overflow-auto border-t border-white/8 px-3.5 py-3 font-mono text-[11px] leading-5 text-slate-500">{msg.reasoningContent}</div>}
+                        </div>
+                      )}
 
-            return (
-              <article
-                key={msg.id}
-                className={isAssistant ? 'flex justify-start' : 'flex justify-end'}
-              >
-                <div
-                  className={
-                    isAssistant
-                      ? 'w-full max-w-[48rem] text-[15px] leading-7 text-slate-200'
-                      : 'max-w-[42rem] rounded-[24px] rounded-br-md border border-white/10 bg-white/[0.075] px-4 py-3.5 text-[15px] leading-7 text-white shadow-[0_12px_30px_rgba(0,0,0,.22)]'
-                  }
-                >
-                  {isAssistant && msg.reasoningContent && (
-                    <div className="mb-3 overflow-hidden rounded-2xl border border-white/8 bg-white/[0.025]">
-                      <button
-                        type="button"
-                        onClick={() => toggleReasoning(msg.id)}
-                        className="flex w-full items-center justify-between px-3.5 py-2.5 text-xs text-slate-400 transition hover:bg-white/[0.035] hover:text-white"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <Brain className="h-3.5 w-3.5 text-purple-300" />
-                          Reasoning
-                        </span>
-                        {reasoningOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      </button>
-                      {reasoningOpen && (
-                        <div className="max-h-72 overflow-auto border-t border-white/8 px-3.5 py-3 font-mono text-[11px] leading-5 text-slate-500">
-                          {msg.reasoningContent}
+                      <div className={isAssistant ? 'text-[15px] leading-7 text-slate-100' : 'rounded-[22px] rounded-br-md border border-white/12 bg-white/[.085] px-4 py-3.5 text-[15px] leading-7 text-white shadow-[0_16px_38px_rgba(0,0,0,.22)]'}>
+                        {renderMessageContent(msg.content, msg.id)}
+                      </div>
+
+                      {isAssistant && (
+                        <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-600">
+                          <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {msg.tokens ? <span>• {msg.tokens} tokens</span> : null}
+                          <div className="ml-auto flex items-center gap-1">
+                            <button type="button" onClick={() => navigator.clipboard?.writeText(msg.content)} className="rounded-lg border border-white/7 bg-white/2 px-2 py-1 hover:bg-white/6 hover:text-white"><Copy className="h-3 w-3" /></button>
+                            {canRegenerate && <button type="button" onClick={() => onRegenerate(msg.id)} className="rounded-lg border border-white/7 bg-white/2 px-2 py-1 text-[10px] hover:bg-white/6 hover:text-white">Regenerate</button>}
+                          </div>
                         </div>
                       )}
                     </div>
-                  )}
-
-
-
-                  <div>{renderMessageContent(msg.content, msg.id)}</div>
-
-                  {isAssistant && (
-                    <div className="mt-3 flex items-center gap-3 text-[10px] text-slate-600">
-                      <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      {msg.tokens ? <span>• {msg.tokens} tokens</span> : null}
-                      <span className="ml-auto flex items-center gap-1">
-                        <button type="button" onClick={() => navigator.clipboard?.writeText(msg.content)} className="rounded-full border border-white/8 bg-white/[0.02] p-1.5 transition hover:bg-white/[0.06] hover:text-white" title="Copy answer">
-                          <Copy className="h-3 w-3" />
-                        </button>
-                        {canRegenerate && (
-                          <button type="button" onClick={() => onRegenerate(msg.id)} className="rounded-full border border-white/8 bg-white/[0.02] px-2 py-1 text-[10px] transition hover:bg-white/[0.06] hover:text-white" title="Regenerate">
-                            Regenerate
-                          </button>
-                        )}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-
-          {isStreaming && (
-            <div className="flex items-center gap-2 pl-1 text-xs text-slate-500">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              <span>LX AI is thinking…</span>
+                  </article>
+                );
+              })}
+              {isStreaming && <div className="flex items-center gap-2 text-xs text-slate-500"><span className="h-2 w-2 animate-pulse rounded-full bg-violet-300" /> LX AI is working…</div>}
             </div>
           )}
-
-          <div ref={messagesEndRef} className="h-px shrink-0" />
+          <div ref={messagesEndRef} className="h-px" />
         </div>
       </div>
 
-      <div className="higgs-composer shrink-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl sm:px-5 md:px-8">
+      <div className="higgs-composer shrink-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+.7rem)] pt-2.5 sm:px-5 md:px-8">
         <div className="mx-auto w-full max-w-4xl">
-          <form
-            onSubmit={handleSubmit}
-            className="border-t border-white/8 pt-2"
-          >
-            <div className="flex items-center gap-2 px-1 pb-2">
+          <form onSubmit={handleSubmit} className="rounded-[24px] border border-white/10 bg-white/[.035] p-2 shadow-[0_18px_60px_rgba(0,0,0,.22)]">
+            <div className="flex items-center gap-1.5 border-b border-white/7 px-1 pb-2">
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => { uploadAttachments(event.target.files); event.currentTarget.value = ''; }} />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="higgs-control inline-flex h-8 w-8 items-center justify-center rounded-full border text-slate-300 transition hover:bg-white/[0.10] hover:text-white"
-                title="Đính kèm tệp"
-              >
-                <Paperclip className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={onOpenModelSelector}
-                className="higgs-control inline-flex h-8 min-w-[108px] max-w-[38vw] shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.11] sm:max-w-[12rem]"
-              >
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isGroq(selectedModel) ? 'bg-emerald-400' : 'bg-cyan-300'}`} />
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="higgs-control flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-slate-200" title="Attach files"><Paperclip className="h-4 w-4" /></button>
+              <button type="button" onClick={onOpenModelSelector} className="higgs-control flex min-w-0 max-w-[48vw] items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold text-white sm:max-w-xs">
+                <span className={'h-1.5 w-1.5 rounded-full ' + (isGroq(selectedModel) ? 'bg-emerald-300' : 'bg-cyan-300')} />
                 <span className="min-w-0 truncate">{selectedModel.displayName || selectedModel.id.split(':').pop() || 'Model'}</span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
               </button>
-
-              <div className="higgs-control flex items-center rounded-full border p-1">
-                {([
-                  ['fast', 'Fast', Zap],
-                  ['thinking', 'Think', Brain],
-                  ['auto', 'Auto', Sparkles],
-                ] as const).map(([id, label, Icon]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setMode(id)}
-                    className={[
-                      'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[10px] font-medium transition',
-                      mode === id ? 'bg-white text-black' : 'text-slate-500 hover:text-white',
-                    ].join(' ')}
-                  >
-                    <Icon className="h-3 w-3" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="ml-auto flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSearchEnabled((value) => !value)}
-                  className={[
-                    'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium transition',
-                    searchEnabled
-                      ? 'border-cyan-300/20 bg-cyan-300/10 text-cyan-200'
-                      : 'border-white/8 bg-white/[0.025] text-slate-500 hover:bg-white/[0.06] hover:text-white',
-                  ].join(' ')}
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Search</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenVoicePartner}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-500 transition hover:bg-white/[0.06] hover:text-white"
-                  title="Voice"
-                >
-                  <Mic className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onClearChat}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-500 transition hover:border-rose-400/20 hover:bg-rose-400/10 hover:text-rose-300"
-                  title="Clear chat"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+              <div className="ml-auto flex items-center gap-1">
+                <button type="button" onClick={() => setSearchEnabled((value) => !value)} className={['higgs-control flex h-9 items-center gap-1.5 rounded-full border px-3 text-[11px] font-semibold', searchEnabled ? 'border-cyan-200/20 bg-cyan-200/8 text-cyan-100' : 'text-slate-500 hover:text-white'].join(' ')}><Globe className="h-3.5 w-3.5" /><span className="hidden sm:inline">Search</span></button>
+                <button type="button" onClick={onOpenVoicePartner} className="higgs-control hidden h-9 w-9 items-center justify-center rounded-full border text-slate-300 sm:flex" title="Voice"><Mic className="h-3.5 w-3.5" /></button>
               </div>
             </div>
 
             {pendingAttachments.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-2 overflow-x-auto px-1 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {pendingAttachments.map((attachment) => (
-                  <div key={attachment.id} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/8 bg-white/[0.035] px-2.5 py-1.5 text-[10px] text-slate-300">
-                    <Paperclip className="h-3 w-3 text-cyan-300" />
+                  <div key={attachment.id} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/8 bg-white/4 px-2.5 py-1.5 text-[10px] text-slate-300">
+                    <Paperclip className="h-3 w-3 text-cyan-200" />
                     <span className="max-w-[10rem] truncate">{attachment.name}</span>
-                    <button type="button" onClick={() => setPendingAttachments((items) => items.filter((item) => item.id !== attachment.id))} className="rounded-full p-0.5 text-slate-600 hover:text-white" title="Remove attachment">×</button>
+                    <button type="button" onClick={() => setPendingAttachments((items) => items.filter((item) => item.id !== attachment.id))} className="rounded-full p-0.5 text-slate-600 hover:text-white">×</button>
                   </div>
                 ))}
               </div>
             )}
 
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
-              rows={2}
-              placeholder="Message LX AI…"
-              className="max-h-40 min-h-[66px] w-full resize-none bg-transparent px-2.5 py-2 text-[15px] leading-6 text-white outline-none placeholder:text-slate-600 sm:text-base"
-            />
+            <div className="flex items-end gap-2 px-1 py-1">
+              <textarea
+                value={inputText}
+                onChange={(event) => setInputText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSubmit(event); }
+                }}
+                rows={2}
+                placeholder="Message LX AI…"
+                className="min-h-[54px] max-h-40 min-w-0 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] leading-6 text-white outline-none placeholder:text-slate-600"
+              />
+              <button type="button" onClick={() => { setMode(mode === 'fast' ? 'thinking' : mode === 'thinking' ? 'auto' : 'fast'); }} className="mb-1 hidden rounded-full border border-white/8 bg-white/4 px-2.5 py-1.5 text-[10px] font-semibold text-slate-400 hover:text-white sm:block" title="Cycle mode">
+                {mode === 'fast' ? 'Fast' : mode === 'thinking' ? 'Think' : 'Auto'}
+              </button>
+              {isStreaming ? (
+                <button type="button" onClick={onStopGeneration} className="mb-1 flex h-11 shrink-0 items-center gap-2 rounded-full border border-rose-300/15 bg-rose-300/10 px-4 text-xs font-bold text-rose-100"><Square className="h-3.5 w-3.5 fill-current" /> Stop</button>
+              ) : (
+                <button type="submit" disabled={!inputText.trim()} className="mb-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_10px_30px_rgba(255,255,255,.12)] transition hover:scale-[1.04] hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-25" title="Send message"><Send className="h-4 w-4 stroke-[2.5]" /></button>
+              )}
+            </div>
 
-            <div className="flex items-center justify-between px-1 pt-1.5">
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onOpenVoicePartner()}
-                  className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-500 transition hover:bg-white/[0.06] hover:text-white sm:flex"
-                  title="Voice"
-                >
-                  <Mic className="h-4 w-4" />
-                </button>
-                {isStreaming ? (
-                  <button
-                    type="button"
-                    onClick={onStopGeneration}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-rose-400/20 bg-rose-400/10 px-4 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/15"
-                  >
-                    <Square className="h-3.5 w-3.5 fill-current" />
-                    Stop
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={!inputText.trim()}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,.08)] transition hover:scale-[1.04] hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-25"
-                    title="Send"
-                  >
-                    <Send className="h-4 w-4 stroke-[2.5]" />
-                  </button>
-                )}
+            <div className="flex items-center justify-between px-1 pt-1">
+              <div className="flex items-center gap-2 text-[10px] text-slate-600">
+                <span>Enter to send</span>
+                <span className="text-slate-700">•</span>
+                <span>{mode === 'fast' ? 'Fast' : mode === 'thinking' ? 'Deep reasoning' : 'Auto'} mode</span>
               </div>
+              <button type="button" onClick={onClearChat} className="rounded-lg p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300" title="Clear chat"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           </form>
-
-          <div className="px-2 pt-2 text-center text-[9px] text-slate-700">
-            Enter to send · Shift+Enter for a new line
-          </div>
         </div>
       </div>
     </section>
