@@ -110,7 +110,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
             <div
               className="dynamic-glass glass-elevated rounded-[24px] border border-white/12"
-              onPointerMove={updateGlass}\n              onPointerLeave={resetGlass}
+              onPointerMove={updateGlass}
+              onPointerLeave={resetGlass}
             >
               <form onSubmit={submit}>
                 <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 sm:px-5">
