@@ -17,6 +17,7 @@ export interface ProviderStatus {
   exa: boolean;
   langsearch: boolean;
   xkiro: boolean;
+  cloudflare: boolean;
   telegram: boolean;
 }
 
@@ -86,6 +87,18 @@ export class ServerConfig {
     return singleOrPool('XKIRO_KEY_', 'XKIRO_API_KEY');
   }
 
+  static get cloudflareApiToken(): string | null {
+    return process.env.CLOUDFLARE_API_TOKEN?.trim() || process.env.CLOUDFLARE_API_KEY?.trim() || null;
+  }
+
+  static get cloudflareAccountId(): string | null {
+    return process.env.CLOUDFLARE_ACCOUNT_ID?.trim() || null;
+  }
+
+  static get cloudflareConfigured(): boolean {
+    return !!(this.cloudflareApiToken && this.cloudflareAccountId);
+  }
+
   static get openAIKey(): string | null { return this.openAIKeys[0] || null; }
   static get openRouterKey(): string | null { return this.openRouterKeys[0] || null; }
   static get groqKey(): string | null { return this.groqKeys[0] || null; }
@@ -144,6 +157,7 @@ export class ServerConfig {
       exa: this.exaKeys.length > 0,
       langsearch: this.langSearchKeys.length > 0,
       xkiro: this.xKiroKeys.length > 0,
+      cloudflare: this.cloudflareConfigured,
       telegram: !!(this.telegramBotToken && this.telegramWebhookSecret),
     };
   }
