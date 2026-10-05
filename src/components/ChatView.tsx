@@ -86,6 +86,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setExpandedReasoningIds((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
   };
 
+  const updateGlass = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+    el.style.setProperty('--glass-x', x + '%');
+    el.style.setProperty('--glass-y', y + '%');
+    el.style.setProperty('--liquid-tilt-x', ((50 - y) * 0.04).toFixed(2) + 'deg');
+    el.style.setProperty('--liquid-tilt-y', ((x - 50) * 0.04).toFixed(2) + 'deg');
+  };
+
+  const resetGlass = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    event.currentTarget.style.setProperty('--glass-x', '50%');
+    event.currentTarget.style.setProperty('--glass-y', '18%');
+    event.currentTarget.style.setProperty('--liquid-tilt-x', '0deg');
+    event.currentTarget.style.setProperty('--liquid-tilt-y', '0deg');
+  };
+
   const renderMessageContent = (content: string, msgId: string) => {
     const parts = content.split(/(```[\s\S]*?```)/g);
 
@@ -244,7 +264,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <div className="mx-auto w-full max-w-4xl">
           <form
             onSubmit={handleSubmit}
-            className="dynamic-glass glass-elevated overflow-visible rounded-[26px] border border-white/12 p-2.5 shadow-[0_18px_60px_rgba(0,0,0,.36)]"
+            className="dynamic-glass glass-elevated overflow-visible rounded-[28px] border border-white/12 p-2.5 shadow-[0_22px_70px_rgba(0,0,0,.40)]"
+            onPointerMove={updateGlass}
+            onPointerLeave={resetGlass}
           >
             <div className="flex items-center gap-2 px-1 pb-2">
               <button
