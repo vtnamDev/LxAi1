@@ -28,6 +28,16 @@ const __dirname = path.dirname(__filename);
 Database.init();
 
 const app = express();
+
+type ModelCatalogCache = {
+  expiresAt: number;
+  models: ModelInfo[];
+  providerStatus: ReturnType<typeof ServerConfig.getProviderStatus>;
+};
+
+let modelCatalogCache: ModelCatalogCache | null = null;
+const MODEL_CATALOG_TTL_MS = 120_000;
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/live' });
 
@@ -449,102 +459,110 @@ function mapCatalog(provider: string, items: CatalogModel[], prefix: string, lim
 }
 
 app.get('/api/models', async (_req: Request, res: Response) => {
-  const models: ModelInfo[] = [];
-
-  if (ServerConfig.geminiKeys.length > 0) {
-    models.push(
-      {
-        id: 'gemini-3.8-flash',
-        provider: 'Google',
-        displayName: 'Gemini 3.8 Flash',
-        capabilities: ['text', 'vision', 'code', 'reasoning', 'search', 'fast'],
-        contextWindow: 1048576,
-        status: 'active',
-        isDefault: true,
-        description: 'Current stable Gemini Flash model for multimodal and coding workloads.',
-      },
-    );
+  const now = Date.now();
+  if (modelCatalogCache && modelCatalogCache.expiresAt > now) {
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=120, stale-while-revalidate=300');
+    return res.json({
+      models: modelCatalogCache.models,
+      providerStatus: modelCatalogCache.providerStatus,
+      cached: true,
+      generatedAt: new Date(modelCatalogCache.expiresAt - MODEL_CATALOG_TTL_MS).toISOString(),
+    });
   }
 
-  models.push(...mapCatalog(
-    'OpenAI',
-    await listOpenAICompatibleModels('https://api.openai.com/v1/models', ServerConfig.openAIKeys),
-    '',
-    40,
-  ).filter((m) =>
-    /^(gpt-|o[134](?:-|$))/i.test(m.id)
-    && !/(audio|realtime|transcrib|search-preview|image|moderation|codex|pro)/i.test(m.id)
-  ));
+  const [
+    geminiModels,
+    openAIModels,
+    openRouterModels,
+    groqModels,
+    mistralModels,
+    cerebrasModels,
+    huggingFaceModels,
+    nvidiaModels,
+    xKiroModels,
+    cloudflareModels,
+  ] = await Promise.all([
+    ServerConfig.geminiKeys.length > 0
+      ? Promise.resolve([{
+          id: 'gemini-3.8-flash',
+          provider: 'Google',
+          displayName: 'Gemini 3.8 Flash',
+          capabilities: ['text', 'vision', 'code', 'reasoning', 'search', 'fast'],
+          contextWindow: 1048576,
+          status: 'active',
+          isDefault: true,
+          description: 'Current stable Gemini Flash model for multimodal and coding workloads.',
+        } as ModelInfo])
+      : Promise.resolve([] as ModelInfo[]),
 
-  models.push(...mapCatalog(
-    'OpenRouter',
-    await listOpenAICompatibleModels('https://openrouter.ai/api/v1/models', ServerConfig.openRouterKeys, {
+    listOpenAICompatibleModels('https://api.openai.com/v1/models', ServerConfig.openAIKeys)
+      .then((items) => mapCatalog('OpenAI', items, '', 40).filter((m) =>
+        /^(gpt-|o[134](?:-|$))/i.test(m.id)
+        && !/(audio|realtime|transcrib|search-preview|image|moderation|codex|pro)/i.test(m.id)
+      )),
+
+    listOpenAICompatibleModels('https://openrouter.ai/api/v1/models', ServerConfig.openRouterKeys, {
       'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER || 'https://lxai1.vercel.app',
       'X-Title': 'LX AI'
+    }).then((items) => mapCatalog('OpenRouter', items, 'openrouter:', 80)),
+
+    listOpenAICompatibleModels('https://api.groq.com/openai/v1/models', ServerConfig.groqKeys)
+      .then((items) => mapCatalog('Groq', items, 'groq:', 40)),
+
+    listOpenAICompatibleModels('https://api.mistral.ai/v1/models', ServerConfig.mistralKeys)
+      .then((items) => mapCatalog('Mistral', items, 'mistral:', 40)),
+
+    listOpenAICompatibleModels('https://api.cerebras.ai/v1/models', ServerConfig.cerebrasKeys)
+      .then((items) => mapCatalog('Cerebras', items, 'cerebras:', 40)),
+
+    listOpenAICompatibleModels('https://router.huggingface.co/v1/models', ServerConfig.huggingFaceKeys)
+      .then((items) => mapCatalog('Hugging Face', items, 'huggingface:', 60)),
+
+    Promise.resolve().then(async () => {
+      const nvidiaPool = Object.values(ServerConfig.nvidiaKeys).filter((v): v is string => Boolean(v));
+      return mapCatalog(
+        'NVIDIA NIM',
+        await listOpenAICompatibleModels('https://integrate.api.nvidia.com/v1/models', nvidiaPool),
+        'nvidia:',
+        60,
+      );
     }),
-    'openrouter:',
-    80,
-  ));
 
-  models.push(...mapCatalog(
-    'Groq',
-    await listOpenAICompatibleModels('https://api.groq.com/openai/v1/models', ServerConfig.groqKeys),
-    'groq:',
-    40,
-  ));
+    listOpenAICompatibleModels('https://api.xkiro.com/v1/models', ServerConfig.xKiroKeys)
+      .then((items) => mapCatalog('xKiro', items, 'xkiro:', 40)),
 
-  models.push(...mapCatalog(
-    'Mistral',
-    await listOpenAICompatibleModels('https://api.mistral.ai/v1/models', ServerConfig.mistralKeys),
-    'mistral:',
-    40,
-  ));
+    listCloudflareFreeModels().then((items) => mapCatalog('Cloudflare Workers AI', items, 'cloudflare:', 60).map((m) => ({
+      ...m,
+      description: 'Cloudflare Workers AI model available through the Workers Free allocation when capacity permits.',
+    }))),
+  ]);
 
-  models.push(...mapCatalog(
-    'Cerebras',
-    await listOpenAICompatibleModels('https://api.cerebras.ai/v1/models', ServerConfig.cerebrasKeys),
-    'cerebras:',
-    40,
-  ));
+  const models = Array.from(new Map([
+    ...geminiModels,
+    ...openAIModels,
+    ...openRouterModels,
+    ...groqModels,
+    ...mistralModels,
+    ...cerebrasModels,
+    ...huggingFaceModels,
+    ...nvidiaModels,
+    ...xKiroModels,
+    ...cloudflareModels,
+  ].map((m) => [m.id, m])).values());
 
-  models.push(...mapCatalog(
-    'Hugging Face',
-    await listOpenAICompatibleModels('https://router.huggingface.co/v1/models', ServerConfig.huggingFaceKeys),
-    'huggingface:',
-    60,
-  ));
+  const providerStatus = ServerConfig.getProviderStatus();
+  modelCatalogCache = {
+    models,
+    providerStatus,
+    expiresAt: now + MODEL_CATALOG_TTL_MS,
+  };
 
-  const nvidiaPool = Object.values(ServerConfig.nvidiaKeys).filter((v): v is string => Boolean(v));
-  models.push(...mapCatalog(
-    'NVIDIA NIM',
-    await listOpenAICompatibleModels('https://integrate.api.nvidia.com/v1/models', nvidiaPool),
-    'nvidia:',
-    60,
-  ));
-
-  models.push(...mapCatalog(
-    'xKiro',
-    await listOpenAICompatibleModels('https://api.xkiro.com/v1/models', ServerConfig.xKiroKeys),
-    'xkiro:',
-    40,
-  ));
-
-  models.push(...mapCatalog(
-    'Cloudflare Workers AI',
-    await listCloudflareFreeModels(),
-    'cloudflare:',
-    60,
-  ).map((m) => ({
-    ...m,
-    description: 'Cloudflare Workers AI model available through the Workers Free allocation when capacity permits.',
-  })));
-
-  const unique = Array.from(new Map(models.map((m) => [m.id, m])).values());
-  res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
-  res.json({
-    models: unique,
-    providerStatus: ServerConfig.getProviderStatus(),
-    generatedAt: new Date().toISOString(),
+  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=120, stale-while-revalidate=300');
+  return res.json({
+    models,
+    providerStatus,
+    cached: false,
+    generatedAt: new Date(now).toISOString(),
   });
 });
 
