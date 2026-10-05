@@ -196,10 +196,14 @@ button, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 
 button:focus-visible,
 input:focus-visible,
-textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid rgba(255,255,255,.65);
   outline-offset: 2px;
+}
+
+textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 ::-webkit-scrollbar { width: 7px; height: 7px; }
