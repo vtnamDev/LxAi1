@@ -20,7 +20,7 @@ interface ChatViewProps {
   conversation: Conversation | null;
   onSendMessage: (text: string, mode: ModeType, modelId: string, searchEnabled: boolean, attachments?: Attachment[]) => void;
   onStopGeneration: () => void;
-  onRegenerate: () => void;
+  onRegenerate: (messageId?: string) => void;
   onClearChat: () => void;
   onOpenVoicePartner: () => void;
   onOpenModelSelector: () => void;
@@ -318,7 +318,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         <button type="button" onClick={() => navigator.clipboard?.writeText(msg.content)} className="rounded-full border border-white/8 bg-white/[0.02] p-1.5 transition hover:bg-white/[0.06] hover:text-white" title="Copy answer">
                           <Copy className="h-3 w-3" />
                         </button>
-                        <button type="button" onClick={onRegenerate} className="rounded-full border border-white/8 bg-white/[0.02] px-2 py-1 text-[10px] transition hover:bg-white/[0.06] hover:text-white" title="Regenerate">
+                        <button type="button" onClick={() => onRegenerate(msg.id)} className="rounded-full border border-white/8 bg-white/[0.02] px-2 py-1 text-[10px] transition hover:bg-white/[0.06] hover:text-white" title="Regenerate">
                           Regenerate
                         </button>
                       </span>
