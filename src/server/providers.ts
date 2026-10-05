@@ -73,7 +73,7 @@ Provide articulate, concise, and helpful responses. Format code in markdown code
     }
 
     if (params.webContext) {
-      systemInstruction += `\n\n<web_research>\nUse the verified web research below as the factual grounding for current or time-sensitive claims. Prefer these sources over memory. Do not invent citations or URLs.\n${params.webContext}\n</web_research>`;
+      systemInstruction += `\n\n<web_research>\nUse the verified web research below as the factual grounding for current or time-sensitive claims. Prefer these sources over memory. Do not invent citations or URLs.\nFor the final answer, write the main conclusion first, then a short "Điểm chính" bullet list when useful. When the information is tabular, comparative, or numeric, convert it into a clean Markdown table with meaningful column names. Do not print raw source URLs, source lists, or a "Sources" section unless the user explicitly asks for sources.\n${params.webContext}\n</web_research>`;
     }
 
     const contents = params.messages.map((m) => {
@@ -153,7 +153,7 @@ async function* streamOpenAICompatible(
   let systemMessage = `You are LX AI, an advanced personal AI workspace assistant.`;
   if (params.projectContext) systemMessage += `\n\nContext:\n${params.projectContext}`;
   if (params.webContext) {
-    systemMessage += `\n\nVerified web research from Tavily:\n${params.webContext}`;
+    systemMessage += `\n\nVerified web research from Tavily:\nUse it as grounding. Start with the answer, add "Điểm chính" when useful, use a clean Markdown table for structured or numeric data, and do not print raw URLs or a Sources section unless requested.\n${params.webContext}`;
   }
 
   const messages = [
