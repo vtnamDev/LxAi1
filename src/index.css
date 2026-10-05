@@ -283,3 +283,158 @@ textarea {
     padding-bottom: .5rem;
   }
 }
+
+
+/* LX AI Dynamic Liquid v2
+   Hybrid optical surface inspired by the referenced liquid-glass implementations:
+   CSS frost + live pointer light + directional rim/specular + restrained depth.
+   Heavy refraction remains optional instead of forcing WebGL across the whole workspace.
+*/
+.dynamic-glass {
+  --liquid-x: var(--glass-x, 50%);
+  --liquid-y: var(--glass-y, 18%);
+  --liquid-tilt-x: 0deg;
+  --liquid-tilt-y: 0deg;
+  background:
+    radial-gradient(260px 150px at var(--liquid-x) var(--liquid-y), rgba(255,255,255,.115), transparent 68%),
+    linear-gradient(145deg, rgba(255,255,255,.075), rgba(255,255,255,.018) 42%, rgba(255,255,255,.032));
+  backdrop-filter: blur(var(--glass-elevated-blur, 12px)) saturate(145%) contrast(1.02);
+  -webkit-backdrop-filter: blur(var(--glass-elevated-blur, 12px)) saturate(145%) contrast(1.02);
+  border-color: rgba(255,255,255,.12);
+  box-shadow:
+    0 20px 70px rgba(0,0,0,.34),
+    0 1px 0 rgba(255,255,255,.055) inset,
+    0 -10px 40px rgba(255,255,255,.012) inset;
+  transform: perspective(1400px) rotateX(var(--liquid-tilt-x)) rotateY(var(--liquid-tilt-y));
+  transform-origin: center;
+  will-change: transform, background;
+  transition:
+    transform 280ms cubic-bezier(.2,.8,.2,1),
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.dynamic-glass:hover {
+  border-color: rgba(255,255,255,.16);
+  box-shadow:
+    0 24px 80px rgba(0,0,0,.38),
+    0 1px 0 rgba(255,255,255,.07) inset,
+    0 0 0 1px rgba(255,255,255,.02);
+}
+
+.dynamic-glass::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(240px 180px at var(--liquid-x) var(--liquid-y), rgba(255,255,255,.16), transparent 62%),
+    radial-gradient(170px 130px at calc(var(--liquid-x) + 12%) calc(var(--liquid-y) + 20%), rgba(96,235,202,.045), transparent 70%);
+  filter: blur(18px);
+  opacity: .72;
+  mix-blend-mode: screen;
+  transform: translateZ(1px);
+  transition: opacity 220ms ease, filter 260ms ease;
+}
+
+.dynamic-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  padding: 1px;
+  border-radius: inherit;
+  background:
+    radial-gradient(320px 220px at var(--liquid-x) var(--liquid-y), rgba(255,255,255,.26), transparent 64%),
+    linear-gradient(112deg, rgba(255,255,255,.18), rgba(255,255,255,.035) 30%, rgba(255,255,255,.008) 62%, rgba(255,255,255,.13));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: .9;
+  transition: opacity 220ms ease;
+}
+
+.dynamic-glass > * {
+  position: relative;
+  z-index: 1;
+}
+
+[data-tier="full"] .dynamic-glass {
+  backdrop-filter: blur(17px) saturate(155%) contrast(1.03);
+  -webkit-backdrop-filter: blur(17px) saturate(155%) contrast(1.03);
+}
+
+[data-tier="full"] .dynamic-glass::before {
+  opacity: .9;
+  filter: blur(22px);
+}
+
+[data-tier="lite"] .dynamic-glass {
+  backdrop-filter: blur(5px) saturate(125%);
+  -webkit-backdrop-filter: blur(5px) saturate(125%);
+}
+
+[data-tier="lite"] .dynamic-glass::before {
+  opacity: .42;
+  filter: blur(10px);
+}
+
+[data-tier="minimal"] .dynamic-glass {
+  background: #0d1117;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transform: none;
+}
+
+[data-tier="minimal"] .dynamic-glass::before {
+  display: none;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .dynamic-glass {
+    transform: none;
+  }
+  .dynamic-glass::before {
+    opacity: .46;
+  }
+}
+
+/* Global dynamic light: one soft optical source follows the pointer rather than
+   animating every component independently. */
+.cosmic-bg::after,
+.cosmic-sunset-bg::after {
+  content: "";
+  position: fixed;
+  left: calc(var(--glass-pointer-x, 50vw) - 18rem);
+  top: calc(var(--glass-pointer-y, 20vh) - 18rem);
+  width: 36rem;
+  height: 36rem;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255,255,255,.055) 0%, rgba(105,190,255,.024) 24%, transparent 68%);
+  filter: blur(24px);
+  opacity: .9;
+  transition: left 160ms cubic-bezier(.2,.8,.2,1), top 220ms cubic-bezier(.2,.8,.2,1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dynamic-glass,
+  .cosmic-bg::after,
+  .cosmic-sunset-bg::after {
+    transition: none !important;
+    transform: none !important;
+  }
+  .dynamic-glass::before {
+    transition: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .cosmic-bg::after,
+  .cosmic-sunset-bg::after {
+    display: none;
+  }
+}
