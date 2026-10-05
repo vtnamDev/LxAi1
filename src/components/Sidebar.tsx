@@ -16,7 +16,8 @@ import {
   Clock,
   ExternalLink,
   Boxes,
-  LogOut
+  LogOut,
+  Pin
 } from 'lucide-react';
 import { ViewType, QuotaInfo, Conversation, UserProfile } from '../types';
 
@@ -49,6 +50,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   user,
   onLogout,
 }) => {
+  const [pinnedIds, setPinnedIds] = React.useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('lx_pinned_conversations') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const togglePinned = (id: string) => {
+    setPinnedIds((current) => {
+      const next = current.includes(id) ? current.filter((value) => value !== id) : [id, ...current].slice(0, 12);
+      try { localStorage.setItem('lx_pinned_conversations', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  const pinnedConversations = conversations.filter((c) => pinnedIds.includes(c.id));
+  const recentConversations = conversations.filter((c) => !pinnedIds.includes(c.id));
+
   const navItems = [
     { id: 'home' as ViewType, label: 'Home', labelVi: 'Trang chủ', icon: Home },
     { id: 'chat' as ViewType, label: 'Chat & Partner', labelVi: 'Trò chuyện AI', icon: MessageSquare },
@@ -133,14 +153,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
 
-          {/* Recent Conversations quick-list */}
+          {/* Pinned + Recent Conversations */}
           {conversations.length > 0 && (
             <div className="pt-4 pb-2">
-              <div className="px-3 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Recent Chats
-              </div>
-              <div className="space-y-0.5 mt-1 max-h-40 overflow-y-auto">
-                {conversations.slice(0, 5).map((c) => {
+              {pinnedConversations.length > 0 && (
+                <>
+                  <div className="px-3 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pinned</div>
+                  <div className="space-y-0.5 mt-1 mb-3">
+                    {pinnedConversations.map((c) => {
                   const isConvActive = activeConversationId === c.id && currentView === 'chat';
                   return (
                     <button
@@ -156,13 +176,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       }`}
                     >
                       <MessageSquare className="w-3 h-3 shrink-0 opacity-60" />
-                      <span className="truncate">{c.title || 'Untitled Chat'}</span>
+                      <span className="min-w-0 flex-1 truncate">{c.title || 'Untitled Chat'}</span>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); togglePinned(c.id); }}
+                        className="shrink-0 rounded-full p-1 text-slate-600 transition hover:bg-white/[0.07] hover:text-cyan-300"
+                        title="Bỏ ghim"
+                      >
+                        <Pin className="h-3 w-3 fill-current" />
+                      </button>
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </>
           )}
+          <div className="px-3 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Recent Chats</div>
+          <div className="space-y-0.5 mt-1 max-h-40 overflow-y-auto">
+            {recentConversations.slice(0, 5).map((c) => {}
         </nav>
 
         {/* Quota & Token Progress Card */}
