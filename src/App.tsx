@@ -355,7 +355,8 @@ export default function App() {
     mode: ModeType,
     modelId: string,
     searchEnabled: boolean,
-    attachments?: Attachment[]
+    attachments?: Attachment[],
+    regenerateAssistantId?: string
   ) => {
     if (!text.trim() || isStreaming) return;
 
@@ -380,13 +381,16 @@ export default function App() {
 
     setCurrentView('chat');
 
-    const userMessage: Message = {
-      id: `msg_user_${Date.now()}`,
-      role: 'user',
-      content: text,
-      attachments,
-      createdAt: new Date().toISOString(),
-    };
+    const lastUserForRegenerate = [...(targetConv?.messages || [])].reverse().find((m) => m.role === 'user');
+    const userMessage: Message = regenerateAssistantId && lastUserForRegenerate
+      ? lastUserForRegenerate
+      : {
+          id: `msg_user_${Date.now()}`,
+          role: 'user',
+          content: text,
+          attachments,
+          createdAt: new Date().toISOString(),
+        };
 
     const assistantMessageId = `msg_asst_${Date.now()}`;
     const initialAssistantMessage: Message = {
@@ -398,7 +402,12 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
 
-    const updatedMessages = [...targetConv.messages, userMessage, initialAssistantMessage];
+    const baseMessages = regenerateAssistantId
+      ? targetConv.messages.filter((m) => m.id !== regenerateAssistantId)
+      : targetConv.messages;
+    const updatedMessages = regenerateAssistantId && lastUserForRegenerate && !baseMessages.includes(lastUserForRegenerate)
+      ? [...baseMessages, lastUserForRegenerate, initialAssistantMessage]
+      : [...baseMessages, ...(regenerateAssistantId ? [] : [userMessage]), initialAssistantMessage];
 
     setConversations((prev) =>
       prev.map((c) =>
@@ -424,7 +433,9 @@ export default function App() {
           ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
         },
         body: JSON.stringify({
-          messages: [...targetConv.messages, userMessage],
+          messages: regenerateAssistantId
+            ? [...targetConv.messages.filter((m) => m.id !== regenerateAssistantId)]
+            : [...targetConv.messages, userMessage],
           modelId,
           mode,
           enableSearch: searchEnabled,
@@ -549,12 +560,30 @@ export default function App() {
     setIsStreaming(false);
   };
 
-  const handleRegenerate = () => {
-    if (!activeConversation || activeConversation.messages.length === 0) return;
-    const lastUserMsg = [...activeConversation.messages].reverse().find((m) => m.role === 'user');
-    if (lastUserMsg) {
-      handleSendMessage(lastUserMsg.content, activeConversation.mode, activeConversation.modelId, false);
-    }
+  const handleRegenerate = (assistantMessageId?: string) => {
+    if (!activeConversation || activeConversation.messages.length === 0 || isStreaming) return;
+
+    const targetAssistant =
+      assistantMessageId
+        ? activeConversation.messages.find((message) => message.id === assistantMessageId && message.role === 'assistant')
+        : [...activeConversation.messages].reverse().find((message) => message.role === 'assistant');
+
+    const userBeforeAssistant = targetAssistant
+      ? [...activeConversation.messages.slice(0, activeConversation.messages.indexOf(targetAssistant))]
+          .reverse()
+          .find((message) => message.role === 'user')
+      : [...activeConversation.messages].reverse().find((message) => message.role === 'user');
+
+    if (!targetAssistant || !userBeforeAssistant) return;
+
+    handleSendMessage(
+      userBeforeAssistant.content,
+      activeConversation.mode,
+      activeConversation.modelId,
+      searchEnabled,
+      userBeforeAssistant.attachments,
+      targetAssistant.id,
+    );
   };
 
   const handleSaveVoiceTurnToChat = (userText: string, modelReply: string) => {
