@@ -835,6 +835,693 @@ function formatTavilyContext(sources: TavilySource[]): string {
   ).join('\n\n');
 }
 
+
+/* -------------------------------------------------------------
+ * 7.5. Coding Agent + Workspace Artifacts
+ * Real multi-model orchestration. No fake execution claims.
+ * ------------------------------------------------------------- */
+type AgentWorkspaceFile = {
+  path: string;
+  content: string;
+};
+
+function boundedWorkspace(files: any[]): AgentWorkspaceFile[] {
+  const out: AgentWorkspaceFile[] = [];
+  let total = 0;
+  for (const raw of Array.isArray(files) ? files : []) {
+    const filePath = String(raw?.path || '').trim().replace(/^\/+/, '');
+    if (!filePath || filePath.includes('..')) continue;
+    const content = typeof raw?.content === 'string' ? raw.content : '';
+    if (!content) continue;
+    const clipped = content.slice(0, 14000);
+    if (total + clipped.length > 80000) break;
+    total += clipped.length;
+    out.push({ path: filePath, content: clipped });
+  }
+  return out.slice(0, 40);
+}
+
+function parseJsonObject(text: string): any | null {
+  const fence = String.fromCharCode(96).repeat(3);
+  const cleaned = String(text || '')
+    .replace(new RegExp('^\\s*' + fence + '(?:json)?\\s*', 'i'), '')
+    .replace(new RegExp('\\s*' + fence + '\\s*
+// -------------------------------------------------------------
+app.post('/api/chat/stream', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as User;
+  const { messages, modelId = 'gemini-3.8-flash', mode = 'fast', enableSearch, projectContext, turnstileToken } = req.body;
+
+  if (!(await requireTurnstile(req, res, turnstileToken, 'chat'))) return;
+
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'Messages array is required' });
+  }
+
+  // 1. Atomic Per-User Quota Reservation
+  const estimatedReservation = 500;
+  const reservation = Database.reserveBudget(user.id, estimatedReservation);
+  if (!reservation.allowed) {
+    return res.status(429).json({
+      error: reservation.reason || 'Quota limit reached. Please wait for cooldown or redeem FREE_24H voucher.',
+      code: 'QUOTA_EXCEEDED',
+    });
+  }
+
+  // Setup Server-Sent Events headers
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const requestId = `req_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
+  const generationId = `gen_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  const abortController = new AbortController();
+  let reservationOpen = true;
+  let generationCompleted = false;
+
+  const releaseReservationOnce = () => {
+    if (!reservationOpen) return;
+    reservationOpen = false;
+    Database.releaseReservation(user.id, estimatedReservation);
+  };
+
+  const abortOnDisconnect = () => {
+    if (!generationCompleted) {
+      abortController.abort();
+      releaseReservationOnce();
+    }
+  };
+
+  res.on('close', abortOnDisconnect);
+  req.on('aborted', abortOnDisconnect);
+
+  const sendEvent = (event: string, data: any) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  sendEvent('generation.started', { requestId, generationId, modelId, mode, timestamp: Date.now() });
+
+  let totalChars = 0;
+
+  try {
+    let webContext = '';
+    let searchedSources: TavilySource[] = [];
+
+    if (enableSearch) {
+      sendEvent('search.started', {
+        provider: 'Tavily',
+        message: 'Đang tìm kiếm và lọc các nguồn web…',
+      });
+
+      const userQuery = [...messages]
+        .reverse()
+        .find((message: any) => message.role === 'user')
+        ?.content
+        ?.trim();
+
+      if (userQuery) {
+        searchedSources = await runTavilyResearch(userQuery, abortController.signal);
+        webContext = formatTavilyContext(searchedSources);
+
+        if (searchedSources.length > 0) {
+          sendEvent('tool.result', {
+            tool: 'tavily_web_search',
+            sourceCount: searchedSources.length,
+            sources: searchedSources.map(({ title, url, snippet, domain }) => ({
+              title, url, snippet, domain,
+            })),
+          });
+        } else {
+          sendEvent('search.empty', { provider: 'Tavily' });
+        }
+      }
+    }
+
+    // 3. Exact Model Routing (Zero Silent Substitution)
+    const modelMessages = (messages as any[]).map((message) => {
+      if (!Array.isArray(message?.attachments) || message.attachments.length === 0) {
+        return message;
+      }
+
+      const attachmentContext = message.attachments
+        .map((attachment: any) => {
+          const extracted = typeof attachment?.extractedText === 'string'
+            ? attachment.extractedText.slice(0, 30000)
+            : '';
+          if (!extracted) return '';
+          return `\n\n[Attached file: ${String(attachment.name || 'file')}]
+${extracted}`;
+        })
+        .filter(Boolean)
+        .join('');
+
+      return attachmentContext
+        ? { ...message, content: String(message.content || '') + attachmentContext }
+        : message;
+    });
+
+    const stream = ModelRouter.route({
+      modelId,
+      messages: modelMessages,
+      mode,
+      enableSearch: false,
+      projectContext,
+      webContext,
+      signal: abortController.signal,
+    });
+
+    for await (const chunk of stream) {
+      if (abortController.signal.aborted) break;
+
+      if (chunk.text) {
+        totalChars += chunk.text.length;
+        sendEvent('message.delta', { text: chunk.text });
+      }
+
+      // Stream genuine reasoning deltas if supported by provider
+      if (chunk.reasoningText) {
+        sendEvent('reasoning.delta', { text: chunk.reasoningText });
+      }
+
+      if (chunk.sources && chunk.sources.length > 0) {
+        sendEvent('tool.result', { tool: 'web_search', sources: chunk.sources });
+      }
+    }
+
+    const estimatedTokens = Math.max(50, Math.ceil(totalChars / 4));
+
+    if (!abortController.signal.aborted) {
+      Database.commitUsage(user.id, estimatedTokens, estimatedReservation);
+      reservationOpen = false;
+      const updatedQuota = Database.getQuota(user.id);
+
+      sendEvent('usage.recorded', {
+        requestId,
+        generationId,
+        inputTokens: Math.ceil(messages.map((m: any) => m.content?.length || 0).reduce((a: number, b: number) => a + b, 0) / 4),
+        outputTokens: estimatedTokens,
+        totalTokens: estimatedTokens,
+        quotaRemaining: Math.max(0, updatedQuota.limitTokens - updatedQuota.usedTokens),
+      });
+
+      generationCompleted = true;
+      sendEvent('message.completed', {
+        requestId,
+        generationId,
+        messageId: `msg_${Date.now()}`,
+        finishReason: 'stop',
+      });
+    }
+
+    return res.end();
+  } catch (err: any) {
+    releaseReservationOnce();
+
+    if (abortController.signal.aborted) {
+      return res.end();
+    }
+
+    const providerError = err instanceof ProviderError ? err : null;
+    const code = providerError?.code || 'PROVIDER_ERROR';
+    const status = providerError?.status || 502;
+    const safeError = providerError?.message || 'The AI provider could not complete the request.';
+
+    console.error('[AI_STREAM_ERROR]', { requestId, generationId, code, status, error: err?.message });
+    sendEvent('generation.failed', {
+      requestId,
+      generationId,
+      error: safeError,
+      code,
+      status,
+      recoverable: status >= 500 || code === 'RATE_LIMITED',
+    });
+    return res.end();
+  }
+});
+
+// -------------------------------------------------------------
+// 9. Voice Interaction Endpoint (TTS & Partner)
+// -------------------------------------------------------------
+app.post('/api/voice/interact', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as User;
+  const { text, voiceName = 'Zephyr', targetLanguage } = req.body;
+
+  if (!text) {
+    return res.status(400).json({ error: 'Text prompt is required' });
+  }
+
+  const reservation = Database.reserveBudget(user.id, 150);
+  if (!reservation.allowed) {
+    return res.status(429).json({ error: reservation.reason, code: 'QUOTA_EXCEEDED' });
+  }
+
+  try {
+    const ai = GeminiAdapter.getClient();
+    const prompt = targetLanguage
+      ? `You are an expert language partner. Respond concisely in ${targetLanguage}: ${text}`
+      : `You are a conversational voice partner. Reply naturally in 1-2 sentences: ${text}`;
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+    });
+
+    Database.commitUsage(user.id, 150, 150);
+
+    res.json({
+      replyText: result.text || 'I understand.',
+      voiceName,
+      status: 'ready',
+    });
+  } catch (err: any) {
+    Database.releaseReservation(user.id, 150);
+    res.status(502).json({ error: err.message || 'Voice interaction failed' });
+  }
+});
+
+// -------------------------------------------------------------
+// 10. Live WebSocket Duplex Connection (Authenticated)
+// -------------------------------------------------------------
+wss.on('connection', async (clientWs: WebSocket, req: http.IncomingMessage) => {
+  // Extract token from query string ?token=...
+  const url = new URL(req.url || '', `http://${req.headers.host}`);
+  const token = url.searchParams.get('token');
+  const user = await Database.validateSession(token);
+
+  if (!user) {
+    clientWs.close(4401, 'Authentication Required');
+    return;
+  }
+
+  console.log(`[Live WebSocket] User ${user.email} connected for voice conversation`);
+  let liveSession: any = null;
+
+  try {
+    const ai = GeminiAdapter.getClient();
+
+    liveSession = await (ai.live as any).connect({
+      model: 'gemini-3.8-flash',
+      callbacks: {
+        onMessage: (msg: any) => {
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify(msg));
+          }
+        },
+      },
+      config: {
+        generationConfig: {
+          responseModalities: ['AUDIO' as any],
+        },
+      },
+    });
+
+    clientWs.on('message', async (data: Buffer | string) => {
+      try {
+        if (typeof data === 'string') {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'ping') {
+            clientWs.send(JSON.stringify({ type: 'pong' }));
+          }
+        }
+      } catch (e) {}
+    });
+
+    clientWs.on('close', () => {
+      if (liveSession) {
+        try { liveSession.close?.(); } catch (e) {}
+      }
+    });
+  } catch (err: any) {
+    console.error('[Live WebSocket Connection Error]', err);
+    clientWs.send(JSON.stringify({ error: err?.message || 'Failed to initialize live voice session' }));
+    clientWs.close(1011, 'Live connection failed');
+  }
+});
+
+// -------------------------------------------------------------
+// 11. Telegram Webhook (Strict Timing-Safe Secret Validation)
+// -------------------------------------------------------------
+app.post('/api/telegram/webhook', (req: Request, res: Response) => {
+  const secretToken = req.headers['x-telegram-bot-api-secret-token'];
+  const configuredSecret = ServerConfig.telegramWebhookSecret;
+
+  if (!configuredSecret || !secretToken || typeof secretToken !== 'string') {
+    return res.status(403).json({ error: 'Unauthorized: missing or invalid secret token' });
+  }
+
+  try {
+    const a = Buffer.from(secretToken);
+    const b = Buffer.from(configuredSecret);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return res.status(403).json({ error: 'Unauthorized: secret token mismatch' });
+    }
+  } catch {
+    return res.status(403).json({ error: 'Unauthorized: secret token mismatch' });
+  }
+
+  const update = req.body;
+  const updateId = update?.update_id || Date.now();
+
+  // Strict update ID idempotency
+  if (Database.isTelegramUpdateProcessed(updateId)) {
+    return res.json({ ok: true, duplicate: true });
+  }
+  Database.markTelegramUpdateProcessed(updateId);
+
+  res.json({ ok: true });
+});
+
+// -------------------------------------------------------------
+// 12. Secure Deployment ZIP Archive Download
+// -------------------------------------------------------------
+app.get('/api/download/deploy-zip', (req: Request, res: Response) => {
+  const zipPath = path.resolve(__dirname, 'lxai-vercel-deploy.zip');
+  if (fs.existsSync(zipPath)) {
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="lxai-vercel-deploy.zip"');
+    return res.sendFile(zipPath);
+  }
+  res.status(404).json({ error: 'Deployment zip file not generated yet' });
+});
+
+// -------------------------------------------------------------
+// Vite Middleware in Dev / Static Serving in Production
+// -------------------------------------------------------------
+async function setupVite() {
+  const isProd = process.env.NODE_ENV === 'production';
+  if (!isProd) {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+    console.log('[LX AI Server] Vite dev middleware mounted');
+  } else {
+    const distPath = path.resolve(__dirname, 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req: Request, res: Response) => {
+      res.sendFile(path.resolve(distPath, 'index.html'));
+    });
+    console.log('[LX AI Server] Static production build mounted from dist');
+  }
+
+  const PORT = ServerConfig.port;
+  server.listen(PORT, () => {
+    console.log(`====================================================`);
+    console.log(`🚀 LX AI — Production AI Platform Running on :${PORT}`);
+    console.log(`   • Security Boundary: Authenticated & Secret-Safe`);
+    console.log(`   • Provider Routing: Exact Multi-Model Router Active`);
+    console.log(`   • Persistence: File-backed Database Active`);
+    console.log(`   • Authoritative 70K Per-User Quota Engine: Active`);
+    console.log(`====================================================`);
+  });
+}
+
+export default app;
+
+// Vercel imports the Express application as a serverless function.
+// The local listener/Vite middleware must not start inside a Vercel invocation.
+if (!process.env.VERCEL) {
+  setupVite();
+}
+), '')
+    .trim();
+
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
+  if (first < 0 || last <= first) return null;
+
+  try {
+    return JSON.parse(cleaned.slice(first, last + 1));
+  } catch {
+    return null;
+  }
+}
+
+async function collectAgentModelText(
+  modelId: string,
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
+  signal?: AbortSignal,
+): Promise<{ text: string; reasoning: string }> {
+  const stream = ModelRouter.route({
+    modelId,
+    messages,
+    mode: 'thinking',
+    enableSearch: false,
+    signal,
+  });
+
+  let text = '';
+  let reasoning = '';
+  for await (const chunk of stream) {
+    if (signal?.aborted) break;
+    if (chunk.text) text += chunk.text;
+    if (chunk.reasoningText) reasoning += chunk.reasoningText;
+  }
+
+  return { text, reasoning };
+}
+
+function summarizeWorkspace(files: AgentWorkspaceFile[]): string {
+  return files.map((file) =>
+    '--- FILE: ' + file.path + ' ---\n' + file.content.slice(0, 12000)
+  ).join('\n\n');
+}
+
+app.post('/api/agent/run', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as User;
+  const { task, modelIds, workspace = [], turnstileToken } = req.body || {};
+
+  if (!(await requireTurnstile(req, res, turnstileToken, 'agent'))) return;
+
+  if (typeof task !== 'string' || task.trim().length < 3) {
+    return res.status(400).json({ error: 'A coding task is required.', code: 'INVALID_AGENT_TASK' });
+  }
+
+  const models = {
+    architect: String(modelIds?.architect || '').trim(),
+    builder: String(modelIds?.builder || '').trim(),
+    reviewer: String(modelIds?.reviewer || '').trim(),
+  };
+
+  if (!models.architect || !models.builder || !models.reviewer) {
+    return res.status(400).json({ error: 'Architect, Builder and Reviewer model IDs are required.', code: 'AGENT_MODELS_REQUIRED' });
+  }
+
+  const reservation = Database.reserveBudget(user.id, 6000);
+  if (!reservation.allowed) {
+    return res.status(429).json({
+      error: reservation.reason || 'AI agent quota exhausted.',
+      code: 'QUOTA_EXCEEDED',
+    });
+  }
+
+  const workspaceFiles = boundedWorkspace(workspace);
+  const requestId = 'agent_' + Date.now() + '_' + crypto.randomBytes(5).toString('hex');
+  const abortController = new AbortController();
+  let committed = false;
+  let totalChars = 0;
+
+  try {
+    const architecturePrompt = [
+      'You are the ARCHITECT in a real coding-agent pipeline.',
+      'Do not claim that code was executed or tested.',
+      'Analyze the task, inspect the supplied workspace, and produce an implementation plan.',
+      'Return concise plain text with: Goal, Changes, Files, Acceptance checks.',
+      '',
+      'TASK:\n' + task.trim(),
+      '',
+      'WORKSPACE:\n' + (summarizeWorkspace(workspaceFiles) || '(empty workspace)'),
+    ].join('\n');
+
+    const architect = await collectAgentModelText(
+      models.architect,
+      [{ role: 'user', content: architecturePrompt }],
+      abortController.signal,
+    );
+    totalChars += architect.text.length + architect.reasoning.length;
+
+    const builderPrompt = [
+      'You are the BUILDER in a real coding-agent pipeline.',
+      'Implement the requested app from the task and architect plan.',
+      'Generate a coherent runnable web project.',
+      'Prefer a preview-friendly standalone HTML/CSS/JS app when the user did not specify a framework.',
+      'Preserve useful existing files and only change what is needed.',
+      'DO NOT claim to have executed commands, installed packages, deployed, or run tests.',
+      'Return ONLY one JSON object with this exact shape:',
+      '{"summary":"...","files":[{"path":"index.html","content":"..."},{"path":"style.css","content":"..."}]}',
+      'Every file path must be relative. No markdown fences. No binary files.',
+      '',
+      'TASK:\n' + task.trim(),
+      '',
+      'ARCHITECT PLAN:\n' + architect.text.slice(0, 18000),
+      '',
+      'CURRENT WORKSPACE:\n' + (summarizeWorkspace(workspaceFiles) || '(empty workspace)'),
+    ].join('\n');
+
+    const builder = await collectAgentModelText(
+      models.builder,
+      [{ role: 'user', content: builderPrompt }],
+      abortController.signal,
+    );
+    totalChars += builder.text.length + builder.reasoning.length;
+
+    const built = parseJsonObject(builder.text);
+    if (!built || !Array.isArray(built.files)) {
+      throw new ProviderError(
+        'Builder returned an invalid project manifest. No fake file generation was reported.',
+        'AGENT_INVALID_OUTPUT',
+        502,
+      );
+    }
+
+    let generatedFiles = boundedWorkspace(built.files);
+    if (generatedFiles.length === 0) {
+      throw new ProviderError('Builder returned no usable files.', 'AGENT_EMPTY_OUTPUT', 502);
+    }
+
+    const reviewerPrompt = [
+      'You are the REVIEWER in a real coding-agent pipeline.',
+      'Review the generated project against the task.',
+      'Do not claim to execute or run the code.',
+      'Check structure, obvious syntax risks, broken references, missing files, unsafe assumptions, and whether index.html can render as a browser preview.',
+      'Return ONLY JSON:',
+      '{"approved":true,"issues":[],"fixes":[],"notes":"..."}',
+      '',
+      'TASK:\n' + task.trim(),
+      '',
+      'GENERATED PROJECT:\n' + summarizeWorkspace(generatedFiles),
+    ].join('\n');
+
+    const reviewer = await collectAgentModelText(
+      models.reviewer,
+      [{ role: 'user', content: reviewerPrompt }],
+      abortController.signal,
+    );
+    totalChars += reviewer.text.length + reviewer.reasoning.length;
+
+    let review = parseJsonObject(reviewer.text) || {
+      approved: false,
+      issues: ['Reviewer returned non-JSON output.'],
+      fixes: [],
+      notes: reviewer.text.slice(0, 4000),
+    };
+
+    let fixApplied = false;
+
+    if (review.approved === false) {
+      const fixPrompt = [
+        'You are the FINAL FIXER in a coding-agent pipeline.',
+        'Apply the reviewer feedback to the generated project.',
+        'Return ONLY JSON: {"summary":"...","files":[{"path":"...","content":"..."}]}',
+        'Do not claim execution or testing.',
+        '',
+        'TASK:\n' + task.trim(),
+        '',
+        'REVIEW:\n' + JSON.stringify(review).slice(0, 12000),
+        '',
+        'CURRENT PROJECT:\n' + summarizeWorkspace(generatedFiles),
+      ].join('\n');
+
+      const fixer = await collectAgentModelText(
+        models.builder,
+        [{ role: 'user', content: fixPrompt }],
+        abortController.signal,
+      );
+      totalChars += fixer.text.length + fixer.reasoning.length;
+
+      const fixed = parseJsonObject(fixer.text);
+      if (fixed && Array.isArray(fixed.files)) {
+        const candidate = boundedWorkspace(fixed.files);
+        if (candidate.length > 0) {
+          generatedFiles = candidate;
+          fixApplied = true;
+        }
+      }
+    }
+
+    const actualTokens = Math.max(100, Math.ceil(totalChars / 4));
+    Database.commitUsage(user.id, actualTokens, 6000);
+    committed = true;
+
+    return res.json({
+      success: true,
+      requestId,
+      models,
+      plan: architect.text.trim(),
+      planReasoning: architect.reasoning.trim(),
+      review,
+      fixApplied,
+      files: generatedFiles,
+      summary: String(built.summary || 'Generated project files.'),
+      execution: {
+        executed: false,
+        serverExecution: 'disabled',
+        browserPreview: generatedFiles.some((file) => file.path.toLowerCase() === 'index.html'),
+      },
+      honesty: {
+        statement: 'LX AI generated and reviewed these files. It did not claim that the project was executed or deployed on the server.',
+      },
+    });
+  } catch (error: any) {
+    if (!committed) Database.releaseReservation(user.id, 6000);
+
+    if (abortController.signal.aborted) {
+      return res.status(499).json({ error: 'Agent run cancelled.', code: 'AGENT_CANCELLED', requestId });
+    }
+
+    const providerError = error instanceof ProviderError ? error : null;
+    const safeMessage = providerError?.message || 'The coding agent could not complete the task.';
+    console.error('[AGENT_RUN_ERROR]', {
+      requestId,
+      code: providerError?.code || 'AGENT_ERROR',
+      status: providerError?.status || 502,
+      error: error?.message,
+    });
+
+    return res.status(providerError?.status || 502).json({
+      error: safeMessage,
+      code: providerError?.code || 'AGENT_ERROR',
+      requestId,
+    });
+  }
+});
+
+app.post('/api/workspace/zip', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const files = boundedWorkspace(req.body?.files);
+    const name = String(req.body?.name || 'lx-ai-project')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'lx-ai-project';
+
+    if (!files.length) {
+      return res.status(400).json({ error: 'No workspace files supplied.', code: 'EMPTY_WORKSPACE' });
+    }
+
+    const { default: AdmZip } = await import('adm-zip');
+    const zip = new AdmZip();
+
+    for (const file of files) {
+      zip.addFile(file.path, Buffer.from(file.content, 'utf8'));
+    }
+
+    const buffer = zip.toBuffer();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="' + name + '.zip"');
+    res.setHeader('Content-Length', String(buffer.length));
+    return res.send(buffer);
+  } catch (error: any) {
+    console.error('[WORKSPACE_ZIP_ERROR]', error);
+    return res.status(500).json({
+      error: 'The project archive could not be generated.',
+      code: 'ZIP_GENERATION_FAILED',
+    });
+  }
+});
+
 // -------------------------------------------------------------
 // 8. AI Gateway: Streaming with Exact Routing & Race Prevention
 // -------------------------------------------------------------
