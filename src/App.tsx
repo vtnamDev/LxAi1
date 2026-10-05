@@ -29,6 +29,7 @@ import { ModelSelectorModal } from './components/ModelSelectorModal';
 import { TelegramModal } from './components/TelegramModal';
 import { SettingsModal } from './components/SettingsModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
+import { withTurnstile } from './lib/turnstile';
 
 const DEFAULT_GROQ_MODEL: ModelInfo = {
   id: 'groq:openai/gpt-oss-20b',
@@ -426,22 +427,25 @@ export default function App() {
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch('/api/chat/stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-        },
-        body: JSON.stringify({
-          messages: regenerateAssistantId
-            ? [...targetConv.messages.filter((m) => m.id !== regenerateAssistantId)]
-            : [...targetConv.messages, userMessage],
-          modelId,
-          mode,
-          enableSearch: searchEnabled,
+      const response = await withTurnstile('chat', (turnstileToken) =>
+        fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+          },
+          body: JSON.stringify({
+            messages: regenerateAssistantId
+              ? [...targetConv.messages.filter((m) => m.id !== regenerateAssistantId)]
+              : [...targetConv.messages, userMessage],
+            modelId,
+            mode,
+            enableSearch: searchEnabled,
+            turnstileToken,
+          }),
+          signal: controller.signal,
         }),
-        signal: controller.signal,
-      });
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
