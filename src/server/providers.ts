@@ -385,6 +385,32 @@ export class XKiroAdapter {
   }
 }
 
+// 10. Cloudflare Workers AI Adapter (OpenAI-compatible REST API)
+export class CloudflareAdapter {
+  static async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const token = ServerConfig.cloudflareApiToken;
+    const accountId = ServerConfig.cloudflareAccountId;
+    if (!token || !accountId) {
+      throw new ProviderError('Cloudflare Workers AI is not configured on this server.', 'PROVIDER_UNAVAILABLE', 503);
+    }
+
+    const model = params.modelId.replace(/^cloudflare:/, '');
+    if (!model) {
+      throw new ProviderError('Cloudflare model ID is required.', 'MODEL_NOT_FOUND', 404);
+    }
+
+    const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/chat/completions`;
+    yield* streamOpenAICompatible(
+      endpoint,
+      token,
+      model,
+      params,
+      'Cloudflare Workers AI',
+      { 'X-LXAI-Provider': 'cloudflare-workers-ai' }
+    );
+  }
+}
+
 // 10. Canonical Model Router — strict model-prefix routing, no hidden provider substitution.
 export class ModelRouter {
   static async *route(params: StreamParams): AsyncIterable<StreamChunk> {
@@ -399,6 +425,7 @@ export class ModelRouter {
     else if (id.startsWith('nvidia:')) yield* NvidiaAdapter.stream(params);
     else if (id.startsWith('huggingface:')) yield* HuggingFaceAdapter.stream(params);
     else if (id.startsWith('xkiro:')) yield* XKiroAdapter.stream(params);
+    else if (id.startsWith('cloudflare:')) yield* CloudflareAdapter.stream(params);
     else throw new ProviderError(`Unknown model: ${id}`, 'MODEL_NOT_FOUND', 404);
   }
 }
