@@ -142,11 +142,11 @@ Provide articulate, concise, and helpful responses. Format code in markdown code
 
 function stripToolCallMarkup(value: string): string {
   return value
-    .replace(/<toolcall>[\\s\\S]*?<\\/toolcall>/gi, '')
+    .replace(/<toolcall>[\s\S]*?<\/toolcall>/gi, '')
     .replace(/<function=[^>]*>/gi, '')
-    .replace(/<\\/function>/gi, '')
+    .replace(/<\/function>/gi, '')
     .replace(/<parameter=[^>]*>/gi, '')
-    .replace(/<\\/parameter>/gi, '');
+    .replace(/<\/parameter>/gi, '');
 }
 
 // Generic OpenAI-compatible streaming helper
@@ -249,7 +249,7 @@ async function* streamOpenAICompatible(
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith(':')) continue;
-        if (trimmed === 'data: [DONE]') return;
+        if (trimmed === 'data: [DONE]') { buffer = ''; break; }
         if (!trimmed.startsWith('data: ')) continue;
 
         try {
@@ -281,11 +281,12 @@ async function* streamOpenAICompatible(
       }
     }
   } finally {
-    const tail = stripToolCallMarkup(toolMarkupBuffer);
-    if (tail) {
-      yield { text: tail };
-    }
     reader.releaseLock();
+  }
+
+  const tail = stripToolCallMarkup(toolMarkupBuffer);
+  if (tail) {
+    yield { text: tail };
   }
 }
 
