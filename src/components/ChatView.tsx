@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronUp,
   Cpu,
-  ExternalLink,
   Trash2,
 } from 'lucide-react';
 import { Message, Conversation, ModeType, ModelInfo, Attachment } from '../types';
@@ -30,10 +29,7 @@ interface ChatViewProps {
   isStreaming: boolean;
 }
 
-const isGroq = (model: ModelInfo) =>
-  model.provider.toLowerCase() === 'groq' || model.id.startsWith('groq:');
-
-export const ChatView: React.FC<ChatViewProps> = ({
+const isGroq = (model: ModelInfo) =>\n  model.provider.toLowerCase() === 'groq' || model.id.startsWith('groq:');\n\nconst isTableDivider = (line: string) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);\nconst splitTableRow = (line: string) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());\nconst isNumericCell = (value: string) => /^-?\d+[\d\s.,]*\s*[₫$€£¥%]?$/.test(value.replace(/[*_`~]/g, '').trim());\n\nconst renderInlineMarkdown = (value: string, keyPrefix: string): React.ReactNode[] => {\n  const pattern = /(\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)]+\)|\*[^*]+\*|_[^_]+_)/g;\n  return value.split(pattern).filter(Boolean).map((part, index) => {\n    if (/^\*\*[^*]+\*\*$/.test(part) || /^__[^_]+__$/.test(part)) return <strong key={keyPrefix + '-b-' + index} className='font-semibold text-white'>{part.slice(2, -2)}</strong>;\n    if (/^~~[^~]+~~$/.test(part)) return <del key={keyPrefix + '-d-' + index} className='text-slate-500'>{part.slice(2, -2)}</del>;\n    if (/^`[^`]+`$/.test(part)) return <code key={keyPrefix + '-c-' + index} className='rounded-md border border-white/8 bg-white/[0.05] px-1.5 py-0.5 font-mono text-[0.9em] text-cyan-100'>{part.slice(1, -1)}</code>;\n    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);\n    if (link) return <a key={keyPrefix + '-l-' + index} href={link[2]} target='_blank' rel='noopener noreferrer' className='font-medium text-cyan-300 underline decoration-cyan-300/30 underline-offset-2 hover:text-cyan-200'>{link[1]}</a>;\n    if (/^\*[^*]+\*$/.test(part) || /^_[^_]+_$/.test(part)) return <em key={keyPrefix + '-i-' + index} className='text-slate-100'>{part.slice(1, -1)}</em>;\n    return <React.Fragment key={keyPrefix + '-t-' + index}>{part}</React.Fragment>;\n  });\n};\n\nconst renderRichBlocks = (markdown: string, keyPrefix: string) => {\n  const lines = markdown.replace(/\r\n/g, '\n').split('\n');\n  const blocks: React.ReactNode[] = [];\n  let index = 0;\n  while (index < lines.length) {\n    const line = lines[index];\n    if (!line.trim()) { index += 1; continue; }\n\n    if (line.includes('|') && index + 1 < lines.length && isTableDivider(lines[index + 1])) {\n      const header = splitTableRow(line);\n      const rows: string[][] = [];\n      index += 2;\n      while (index < lines.length && lines[index].trim() && lines[index].includes('|')) { rows.push(splitTableRow(lines[index])); index += 1; }\n      const width = Math.max(header.length, ...rows.map((row) => row.length));\n      const normalize = (row: string[]) => row.concat(Array(Math.max(0, width - row.length)).fill(''));\n      blocks.push(\n        <div key={keyPrefix + '-table-' + index} className='my-4 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] shadow-[0_10px_35px_rgba(0,0,0,.18)]'>\n          <div className='overflow-x-auto'>\n            <table className='w-full min-w-[620px] border-collapse text-left text-[12px]'>\n              <thead><tr className='border-b border-white/10 bg-white/[0.045]'>\n                {normalize(header).map((cell, column) => <th key={column} className='whitespace-nowrap px-3.5 py-3 font-semibold text-slate-200'>{renderInlineMarkdown(cell, keyPrefix + '-th-' + column)}</th>)}\n              </tr></thead>\n              <tbody>{rows.map((row, rowIndex) => <tr key={rowIndex} className='border-b border-white/[0.06] last:border-0 odd:bg-white/[0.012] hover:bg-white/[0.035]'>\n                {normalize(row).map((cell, column) => <td key={column} className={'px-3.5 py-3 align-top leading-5 text-slate-300 ' + (isNumericCell(cell) ? 'whitespace-nowrap text-right font-mono text-[11px] tabular-nums text-slate-100' : '')}>{renderInlineMarkdown(cell, keyPrefix + '-td-' + rowIndex + '-' + column)}</td>)}\n              </tr>)}</tbody>\n            </table>\n          </div>\n        </div>\n      );\n      continue;\n    }\n\n    const heading = line.match(/^#{1,4}\s+(.+)$/);\n    if (heading) {\n      const level = (line.match(/^#+/) || ['#'])[0].length;\n      const className = level === 1 ? 'mt-5 mb-2 text-xl font-semibold tracking-tight text-white' : level === 2 ? 'mt-5 mb-2 text-lg font-semibold tracking-tight text-white' : 'mt-4 mb-1.5 text-[15px] font-semibold tracking-tight text-slate-100';\n      blocks.push(<div key={keyPrefix + '-h-' + index} className={className}>{renderInlineMarkdown(heading[1], keyPrefix + '-hi-' + index)}</div>);\n      index += 1; continue;\n    }\n\n    if (/^\s*[-*+]\s+/.test(line)) {\n      const items: string[] = [];\n      while (index < lines.length && /^\s*[-*+]\s+/.test(lines[index])) { items.push(lines[index].replace(/^\s*[-*+]\s+/, '')); index += 1; }\n      blocks.push(<ul key={keyPrefix + '-ul-' + index} className='my-3 list-disc space-y-1.5 pl-5 text-[15px] leading-7 text-slate-200 marker:text-slate-500'>{items.map((item, i) => <li key={i} className='pl-1'>{renderInlineMarkdown(item, keyPrefix + '-li-' + i)}</li>)}</ul>);\n      continue;\n    }\n\n    if (/^\s*\d+[.)]\s+/.test(line)) {\n      const items: string[] = [];\n      while (index < lines.length && /^\s*\d+[.)]\s+/.test(lines[index])) { items.push(lines[index].replace(/^\s*\d+[.)]\s+/, '')); index += 1; }\n      blocks.push(<ol key={keyPrefix + '-ol-' + index} className='my-3 list-decimal space-y-1.5 pl-6 text-[15px] leading-7 text-slate-200 marker:text-slate-500'>{items.map((item, i) => <li key={i} className='pl-1'>{renderInlineMarkdown(item, keyPrefix + '-oli-' + i)}</li>)}</ol>);\n      continue;\n    }\n\n    if (/^>\s?/.test(line)) {\n      const quote: string[] = [];\n      while (index < lines.length && /^>\s?/.test(lines[index])) { quote.push(lines[index].replace(/^>\s?/, '')); index += 1; }\n      blocks.push(<blockquote key={keyPrefix + '-q-' + index} className='my-3 rounded-r-xl border-l-2 border-cyan-400/40 bg-cyan-400/[0.04] px-4 py-2.5 text-[14px] leading-6 text-slate-300'>{quote.map((item, i) => <div key={i}>{renderInlineMarkdown(item, keyPrefix + '-qi-' + i)}</div>)}</blockquote>);\n      continue;\n    }\n\n    if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)) {\n      blocks.push(<div key={keyPrefix + '-hr-' + index} className='my-5 h-px bg-white/8' />);\n      index += 1; continue;\n    }\n\n    const paragraph: string[] = [line.trim()];\n    index += 1;\n    while (index < lines.length && lines[index].trim() && !/^#{1,4}\s+/.test(lines[index]) && !/^\s*[-*+]\s+/.test(lines[index]) && !/^\s*\d+[.)]\s+/.test(lines[index]) && !/^>\s?/.test(lines[index]) && !(lines[index].includes('|') && index + 1 < lines.length && isTableDivider(lines[index + 1])) && !/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(lines[index])) { paragraph.push(lines[index].trim()); index += 1; }\n    blocks.push(<p key={keyPrefix + '-p-' + index} className='my-2.5 text-[15px] leading-7 text-slate-200'>{renderInlineMarkdown(paragraph.join(' '), keyPrefix + '-pi-' + index)}</p>);\n  }\n  return blocks;\n};\nexport const ChatView: React.FC<ChatViewProps> = ({
   conversation,
   onSendMessage,
   onStopGeneration,
@@ -89,50 +85,28 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const renderMessageContent = (content: string, msgId: string) => {
     const parts = content.split(/(```[\s\S]*?```)/g);
-
     return parts.map((part, index) => {
       if (part.startsWith('```') && part.endsWith('```')) {
-        const lines = part.slice(3, -3).trim().split('\n');
-        const language = lines[0]?.trim() || 'code';
-        const codeText = lines.slice(1).join('\n');
-        const codeBlockId = `${msgId}_code_${index}`;
-
+        const raw = part.slice(3, -3).replace(/^\n/, '');
+        const lines = raw.split('\n');
+        const firstLine = lines[0]?.trim() || '';
+        const hasLanguage = /^[a-zA-Z0-9#+._-]{1,24}$/.test(firstLine);
+        const language = hasLanguage ? firstLine : 'code';
+        const codeText = (hasLanguage ? lines.slice(1) : lines).join('\n').trimEnd();
+        const codeBlockId = msgId + '_code_' + index;
         return (
-          <div key={index} className="my-3 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0e12]">
-            <div className="flex items-center justify-between border-b border-white/8 px-3.5 py-2">
-              <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {language}
-              </span>
-              <button
-                type="button"
-                onClick={() => copyToClipboard(codeText, codeBlockId)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] text-slate-400 transition hover:bg-white/[0.08] hover:text-white"
-              >
-                {copiedCodeId === codeBlockId ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" />
-                    Copy
-                  </>
-                )}
+          <div key={index} className='my-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0e12] shadow-[0_12px_40px_rgba(0,0,0,.16)]'>
+            <div className='flex items-center justify-between border-b border-white/8 px-3.5 py-2'>
+              <span className='font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500'>{language}</span>
+              <button type='button' onClick={() => copyToClipboard(codeText, codeBlockId)} className='inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] text-slate-400 transition hover:bg-white/[0.08] hover:text-white'>
+                {copiedCodeId === codeBlockId ? <><Check className='h-3.5 w-3.5 text-emerald-400' />Copied</> : <><Copy className='h-3.5 w-3.5' />Copy</>}
               </button>
             </div>
-            <pre className="max-h-[52vh] overflow-auto px-4 py-3 text-xs leading-6 text-slate-200">
-              <code>{codeText}</code>
-            </pre>
+            <pre className='max-h-[52vh] overflow-auto px-4 py-3 text-xs leading-6 text-slate-200'><code>{codeText}</code></pre>
           </div>
         );
       }
-
-      return (
-        <span key={index} className="whitespace-pre-wrap break-words">
-          {part}
-        </span>
-      );
+      return <React.Fragment key={index}>{renderRichBlocks(part, msgId + '-part-' + index)}</React.Fragment>;
     });
   };
 
@@ -194,28 +168,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     </div>
                   )}
 
-                  {isAssistant && msg.sources && msg.sources.length > 0 && (
-                    <div className="mb-4">
-                      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-600">
-                        <Globe className="h-3 w-3" />
-                        Sources
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {msg.sources.map((src, i) => (
-                          <a
-                            key={i}
-                            href={src.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="group inline-flex max-w-full items-center gap-2 rounded-full border border-white/8 bg-white/[0.025] px-3 py-1.5 text-[11px] text-slate-400 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
-                          >
-                            <span className="max-w-[16rem] truncate">{src.title}</span>
-                            <ExternalLink className="h-3 w-3 shrink-0 opacity-50 group-hover:opacity-100" />
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+
 
                   <div>{renderMessageContent(msg.content, msg.id)}</div>
 
@@ -327,14 +280,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
             />
 
             <div className="flex items-center justify-between px-1 pt-1.5">
-              <button
-                type="button"
-                onClick={() => onOpenModelSelector()}
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] text-slate-600 transition hover:bg-white/[0.035] hover:text-slate-300"
-              >
-                <Cpu className="h-3 w-3" />
-                <span className="max-w-[11rem] truncate">{selectedModel.provider}</span>
-              </button>
 
               <div className="flex items-center gap-1.5">
                 <button
