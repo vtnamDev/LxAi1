@@ -102,7 +102,7 @@ export const CodingStudioView: React.FC = () => {
   }, [active?.path]);
 
   useEffect(() => {
-    fetch('/api/models', { cache: 'no-store' })
+    fetch('/api/models')
       .then((response) => response.ok ? response.json() : { models: [] })
       .then((data) => {
         const live = Array.isArray(data.models)
