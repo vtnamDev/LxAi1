@@ -125,6 +125,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   conversation,
   onSendMessage,
   onStopGeneration,
+  onRegenerate,
   onClearChat,
   onOpenVoicePartner,
   onOpenModelSelector,
