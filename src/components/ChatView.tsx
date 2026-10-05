@@ -264,18 +264,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <div className="mx-auto w-full max-w-4xl">
           <form
             onSubmit={handleSubmit}
-            className="dynamic-glass glass-elevated overflow-visible rounded-[28px] border border-white/12 p-2.5 shadow-[0_22px_70px_rgba(0,0,0,.40)]"
-            onPointerMove={updateGlass}
-            onPointerLeave={resetGlass}
+            className="border-t border-white/8 pt-2"
           >
             <div className="flex items-center gap-2 px-1 pb-2">
               <button
                 type="button"
                 onClick={onOpenModelSelector}
-                className="inline-flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/[0.09]"
+                className="inline-flex h-8 min-w-[108px] max-w-[38vw] shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.09] sm:max-w-[12rem]"
               >
-                <span className={`h-1.5 w-1.5 rounded-full ${isGroq(selectedModel) ? 'bg-emerald-400' : 'bg-cyan-300'}`} />
-                <span className="max-w-[12rem] truncate">{selectedModel.displayName}</span>
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isGroq(selectedModel) ? 'bg-emerald-400' : 'bg-cyan-300'}`} />
+                <span className="min-w-0 truncate">{selectedModel.displayName || selectedModel.id.split(':').pop() || 'Model'}</span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
               </button>
 
