@@ -161,39 +161,77 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="px-3 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pinned</div>
                   <div className="space-y-0.5 mt-1 mb-3">
                     {pinnedConversations.map((c) => {
+                      const isConvActive = activeConversationId === c.id && currentView === 'chat';
+                      return (
+                        <div
+                          key={c.id}
+                          className={`group flex items-center gap-1 rounded-lg transition-colors ${isConvActive ? 'bg-blue-600/20 border border-blue-500/30' : 'hover:bg-white/5'}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectConversation(c.id);
+                              onCloseMobile();
+                            }}
+                            className={`min-w-0 flex-1 text-left px-3 py-1.5 text-xs truncate cursor-pointer ${isConvActive ? 'text-cyan-200' : 'text-slate-400 hover:text-slate-200'}`}
+                          >
+                            <span className="inline-flex min-w-0 w-full items-center gap-2">
+                              <MessageSquare className="w-3 h-3 shrink-0 opacity-60" />
+                              <span className="min-w-0 truncate">{c.title || 'Untitled Chat'}</span>
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => togglePinned(c.id)}
+                            className="mr-1 shrink-0 rounded-full p-1 text-cyan-300/70 transition hover:bg-white/[0.07] hover:text-cyan-200"
+                            title="Bỏ ghim"
+                          >
+                            <Pin className="h-3 w-3 fill-current" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              <div className="px-3 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Recent Chats</div>
+              <div className="space-y-0.5 mt-1 max-h-40 overflow-y-auto">
+                {recentConversations.slice(0, 5).map((c) => {
                   const isConvActive = activeConversationId === c.id && currentView === 'chat';
                   return (
-                    <button
+                    <div
                       key={c.id}
-                      onClick={() => {
-                        onSelectConversation(c.id);
-                        onCloseMobile();
-                      }}
-                      className={`w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition-colors flex items-center gap-2 cursor-pointer ${
-                        isConvActive
-                          ? 'bg-blue-600/20 text-cyan-200 border border-blue-500/30'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                      }`}
+                      className={`group flex items-center gap-1 rounded-lg transition-colors ${isConvActive ? 'bg-blue-600/20 border border-blue-500/30' : 'hover:bg-white/5'}`}
                     >
-                      <MessageSquare className="w-3 h-3 shrink-0 opacity-60" />
-                      <span className="min-w-0 flex-1 truncate">{c.title || 'Untitled Chat'}</span>
                       <button
                         type="button"
-                        onClick={(event) => { event.stopPropagation(); togglePinned(c.id); }}
-                        className="shrink-0 rounded-full p-1 text-slate-600 transition hover:bg-white/[0.07] hover:text-cyan-300"
-                        title="Bỏ ghim"
+                        onClick={() => {
+                          onSelectConversation(c.id);
+                          onCloseMobile();
+                        }}
+                        className={`min-w-0 flex-1 text-left px-3 py-1.5 text-xs truncate cursor-pointer ${isConvActive ? 'text-cyan-200' : 'text-slate-400 hover:text-slate-200'}`}
                       >
-                        <Pin className="h-3 w-3 fill-current" />
+                        <span className="inline-flex min-w-0 w-full items-center gap-2">
+                          <MessageSquare className="w-3 h-3 shrink-0 opacity-60" />
+                          <span className="min-w-0 truncate">{c.title || 'Untitled Chat'}</span>
+                        </span>
                       </button>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => togglePinned(c.id)}
+                        className="mr-1 shrink-0 rounded-full p-1 text-slate-600 transition hover:bg-white/[0.07] hover:text-cyan-300"
+                        title="Ghim cuộc trò chuyện"
+                      >
+                        <Pin className="h-3 w-3" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
-            </>
+            </div>
           )}
-          <div className="px-3 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Recent Chats</div>
-          <div className="space-y-0.5 mt-1 max-h-40 overflow-y-auto">
-            {recentConversations.slice(0, 5).map((c) => {}
+
         </nav>
 
         {/* Quota & Token Progress Card */}
