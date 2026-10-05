@@ -417,85 +417,20 @@ app.post('/api/search', requireAuth, async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Search query is required and must be <= 2000 characters' });
   }
 
-  const normalizeResults = (items: any[]) => items.filter(Boolean).map((r: any) => ({
-    title: r.title || r.name || 'Untitled source',
-    url: r.url || r.link || '',
-    snippet: r.snippet || r.content || r.summary || r.text || '',
-  })).filter((r) => r.url);
-
-  // 1. Tavily — rotate keys instead of pinning key #1.
-  const tavilyKeys = ServerConfig.tavilyKeys;
-  for (let i = 0; i < tavilyKeys.length; i++) {
-    const key = tavilyKeys[(i + Date.now()) % tavilyKeys.length];
-    try {
-      const response = await fetch('https://api.tavily.com/search', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: key, query, search_depth: 'advanced', include_answer: true, max_results: 5 }),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (response.ok) {
-        const data: any = await response.json();
-        const sources = normalizeResults(data.results || []);
-        if (sources.length) return res.json({ query, summary: data.answer || sources[0].snippet, sources, engine: 'Tavily' });
-      }
-    } catch (err) {
-      console.warn('[Tavily search failed]', err);
-    }
-  }
-
-  // 2. Exa — real search endpoint.
-  for (const key of ServerConfig.exaKeys) {
-    try {
-      const response = await fetch('https://api.exa.ai/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': key },
-        body: JSON.stringify({ query, type: 'auto', numResults: 5, contents: { highlights: true } }),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (response.ok) {
-        const data: any = await response.json();
-        const sources = normalizeResults((data.results || []).map((r: any) => ({ ...r, snippet: r.highlights?.join(' ') || r.text })));
-        if (sources.length) return res.json({ query, summary: sources[0].snippet, sources, engine: 'Exa' });
-      }
-    } catch (err) {
-      console.warn('[Exa search failed]', err);
-    }
-  }
-
-  // 3. LangSearch — structured search with bearer auth.
-  for (const key of ServerConfig.langSearchKeys) {
-    try {
-      const response = await fetch('https://api.langsearch.com/v1/web-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ query, freshness: 'noLimit', summary: true, count: 5 }),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (response.ok) {
-        const data: any = await response.json();
-        const raw = data?.data?.webPages?.value || data?.webPages?.value || [];
-        const sources = normalizeResults(raw);
-        const summary = data?.data?.summary || data?.summary || sources[0]?.snippet || 'No summary returned';
-        if (sources.length) return res.json({ query, summary, sources, engine: 'LangSearch' });
-      }
-    } catch (err) {
-      console.warn('[LangSearch search failed]', err);
-    }
-  }
-
-  // 4. Gemini Google Search grounding as the final real-search route.
   try {
-    const ai = GeminiAdapter.getClient();
-    const result = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: `Search for this query and provide a factual concise summary: "${query}"`,
-      config: { tools: [{ googleSearch: {} }] },
+    const sources = await runTavilyResearch(query);
+    return res.json({
+      query,
+      engine: 'Tavily',
+      sourceCount: sources.length,
+      sources: sources.map(({ title, url, snippet, domain }) => ({ title, url, snippet, domain })),
     });
-    const groundingChunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const sources = normalizeResults(groundingChunks.map((c: any) => c.web).filter(Boolean));
-    return res.json({ query, summary: result.text || 'No summary returned', sources, engine: 'Google Search Grounding' });
-  } catch (err: any) {
-    return res.status(502).json({ error: 'All configured search providers failed', details: err?.message || 'unknown error' });
+  } catch (error: any) {
+    console.error('[TAVILY_SEARCH_ERROR]', error?.message || error);
+    return res.status(503).json({
+      error: 'Tavily search is temporarily unavailable.',
+      code: 'SEARCH_UNAVAILABLE',
+    });
   }
 });
 
@@ -637,6 +572,127 @@ app.delete('/api/files/:id', requireAuth, (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+
+
+interface TavilySource {
+  title: string;
+  url: string;
+  snippet: string;
+  score: number;
+  domain: string;
+}
+
+function normalizeUrlForSearch(value: string): string {
+  try {
+    const u = new URL(value);
+    u.hash = '';
+    u.searchParams.sort();
+    return u.toString().replace(/\/$/, '');
+  } catch {
+    return value.trim();
+  }
+}
+
+function searchTerms(text: string): string[] {
+  return Array.from(new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((term) => term.length >= 3)
+      .slice(0, 24)
+  ));
+}
+
+function relevanceScore(query: string, item: { title?: string; snippet?: string; url?: string }): number {
+  const terms = searchTerms(query);
+  const haystack = `${item.title || ''} ${item.snippet || ''} ${item.url || ''}`.toLowerCase();
+  if (!terms.length) return 0;
+  const matched = terms.reduce((count, term) => count + (haystack.includes(term) ? 1 : 0), 0);
+  const phraseBonus = haystack.includes(query.toLowerCase().trim()) ? 4 : 0;
+  return matched / terms.length + phraseBonus;
+}
+
+async function runTavilyResearch(query: string, signal?: AbortSignal): Promise<TavilySource[]> {
+  const keys = ServerConfig.tavilyKeys;
+  if (!keys.length) {
+    throw new Error('Tavily is not configured on the server.');
+  }
+
+  const baseQueries = [
+    query.trim(),
+    `\\"${query.trim()}\\" latest current`,
+    `${query.trim()} facts sources`,
+  ].filter(Boolean);
+
+  const tasks = baseQueries.map(async (subQuery, index) => {
+    const orderedKeys = [...keys].sort((a, b) => {
+      const ai = keys.indexOf(a);
+      const bi = keys.indexOf(b);
+      return ((ai + index + Date.now()) % keys.length) - ((bi + index + Date.now()) % keys.length);
+    });
+
+    for (const key of orderedKeys) {
+      try {
+        const response = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: key,
+            query: subQuery,
+            search_depth: 'advanced',
+            include_answer: false,
+            include_raw_content: false,
+            max_results: 10,
+            topic: 'general',
+          }),
+          signal: signal || AbortSignal.timeout(15000),
+        });
+
+        if (!response.ok) continue;
+
+        const data: any = await response.json();
+        return Array.isArray(data.results) ? data.results : [];
+      } catch (error) {
+        if (signal?.aborted) throw error;
+      }
+    }
+    return [];
+  });
+
+  const batches = await Promise.all(tasks);
+  const deduped = new Map<string, TavilySource>();
+
+  for (const batch of batches) {
+    for (const item of batch) {
+      const url = normalizeUrlForSearch(item?.url || '');
+      if (!url) continue;
+      let domain = '';
+      try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+      const source: TavilySource = {
+        title: String(item?.title || '').trim() || domain || 'Untitled source',
+        url,
+        snippet: String(item?.content || item?.snippet || '').trim(),
+        score: relevanceScore(query, item),
+        domain,
+      };
+      if (!source.snippet) continue;
+      const previous = deduped.get(url);
+      if (!previous || source.score > previous.score) deduped.set(url, source);
+    }
+  }
+
+  return [...deduped.values()]
+    .sort((a, b) => b.score - a.score || a.domain.localeCompare(b.domain))
+    .slice(0, 10);
+}
+
+function formatTavilyContext(sources: TavilySource[]): string {
+  return sources.map((source, index) =>
+    `[${index + 1}] ${source.title}\nURL: ${source.url}\nSource: ${source.domain}\nSnippet: ${source.snippet.slice(0, 900)}`
+  ).join('\n\n');
+}
+
 // -------------------------------------------------------------
 // 8. AI Gateway: Streaming with Exact Routing & Race Prevention
 // -------------------------------------------------------------
@@ -696,13 +752,47 @@ app.post('/api/chat/stream', requireAuth, async (req: Request, res: Response) =>
   let totalChars = 0;
 
   try {
+    let webContext = '';
+    let searchedSources: TavilySource[] = [];
+
+    if (enableSearch) {
+      sendEvent('search.started', {
+        provider: 'Tavily',
+        message: 'Đang tìm kiếm và lọc các nguồn web…',
+      });
+
+      const userQuery = [...messages]
+        .reverse()
+        .find((message: any) => message.role === 'user')
+        ?.content
+        ?.trim();
+
+      if (userQuery) {
+        searchedSources = await runTavilyResearch(userQuery, abortController.signal);
+        webContext = formatTavilyContext(searchedSources);
+
+        if (searchedSources.length > 0) {
+          sendEvent('tool.result', {
+            tool: 'tavily_web_search',
+            sourceCount: searchedSources.length,
+            sources: searchedSources.map(({ title, url, snippet, domain }) => ({
+              title, url, snippet, domain,
+            })),
+          });
+        } else {
+          sendEvent('search.empty', { provider: 'Tavily' });
+        }
+      }
+    }
+
     // 3. Exact Model Routing (Zero Silent Substitution)
     const stream = ModelRouter.route({
       modelId,
       messages,
       mode,
-      enableSearch,
+      enableSearch: false,
       projectContext,
+      webContext,
       signal: abortController.signal,
     });
 
