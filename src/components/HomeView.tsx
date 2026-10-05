@@ -65,8 +65,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
     if (event.pointerType !== 'mouse') return;
     const el = event.currentTarget;
     const rect = el.getBoundingClientRect();
-    el.style.setProperty('--glass-x', String(Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)) + '%'));
-    el.style.setProperty('--glass-y', String(Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) + '%'));
+    const x = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+    el.style.setProperty('--glass-x', x + '%');
+    el.style.setProperty('--glass-y', y + '%');
+    el.style.setProperty('--liquid-tilt-x', ((50 - y) * 0.055).toFixed(2) + 'deg');
+    el.style.setProperty('--liquid-tilt-y', ((x - 50) * 0.055).toFixed(2) + 'deg');
+  };
+
+  const resetGlass = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    event.currentTarget.style.setProperty('--glass-x', '50%');
+    event.currentTarget.style.setProperty('--glass-y', '18%');
+    event.currentTarget.style.setProperty('--liquid-tilt-x', '0deg');
+    event.currentTarget.style.setProperty('--liquid-tilt-y', '0deg');
   };
 
   return (
@@ -89,7 +101,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenModelSelector()}
-                className="hidden sm:flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-slate-300 hover:bg-white/[0.06] hover:text-white"
+                className="hidden sm:flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-slate-300 hover:bg-white/[0.06] hover:text-white"
               >
                 <Cpu className="h-3.5 w-3.5" />
                 Models
@@ -98,16 +110,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
             <div
               className="dynamic-glass glass-elevated rounded-[24px] border border-white/12"
-              onPointerMove={updateGlass}
+              onPointerMove={updateGlass}\n              onPointerLeave={resetGlass}
             >
               <form onSubmit={submit}>
                 <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 sm:px-5">
                   <button
                     type="button"
                     onClick={onOpenModelSelector}
-                    className="flex min-w-0 items-center gap-2.5 rounded-xl px-1 py-1 text-left hover:bg-white/[0.035]"
+                    className="flex min-w-0 items-center gap-2.5 rounded-full px-1.5 py-1 text-left hover:bg-white/[0.035]"
                   >
-                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0b0d10]">
+                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#0b0d10]">
                       <Cpu className="h-4 w-4 text-slate-200" />
                       {isGroq(selectedModel) && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400" />}
                     </span>
@@ -127,7 +139,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
                   </button>
 
-                  <div className="hidden items-center gap-1 rounded-lg border border-white/8 bg-black/20 p-1 sm:flex">
+                  <div className="hidden items-center gap-1 rounded-full border border-white/8 bg-black/20 p-1 sm:flex">
                     {([
                       ['fast', 'Fast', Zap],
                       ['thinking', 'Think', Brain],
@@ -137,7 +149,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         key={id}
                         type="button"
                         onClick={() => setMode(id)}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium ${mode === id ? 'bg-white text-black' : 'text-slate-400 hover:text-white'}`}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-medium ${mode === id ? 'bg-white text-black' : 'text-slate-400 hover:text-white'}`}
                       >
                         <Icon className="h-3 w-3" />
                         {label}
@@ -166,7 +178,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onNavigate('files')}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/8 bg-white/[0.025] text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-400 hover:bg-white/[0.06] hover:text-white"
                       title="Files"
                     >
                       <Paperclip className="h-4 w-4" />
@@ -174,7 +186,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setSearchEnabled((v) => !v)}
-                      className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs ${searchEnabled ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-200' : 'border-white/8 bg-white/[0.025] text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
+                      className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs ${searchEnabled ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-200' : 'border-white/8 bg-white/[0.025] text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
                     >
                       <Search className="h-3.5 w-3.5" />
                       Search
@@ -182,7 +194,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <button
                       type="button"
                       onClick={onOpenVoicePartner}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/8 bg-white/[0.025] text-slate-400 hover:bg-white/[0.06] hover:text-white sm:w-auto sm:px-3"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-400 hover:bg-white/[0.06] hover:text-white sm:w-auto sm:px-3"
                       title="Voice"
                     >
                       <Mic className="h-4 w-4" />
@@ -208,7 +220,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   key={label}
                   type="button"
                   onClick={action}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2 text-xs text-slate-400 hover:border-white/14 hover:bg-white/[0.045] hover:text-white"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/8 bg-white/[0.02] px-3 py-2 text-xs text-slate-400 hover:border-white/14 hover:bg-white/[0.045] hover:text-white"
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {label}
