@@ -348,7 +348,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-white/8 bg-[#090b0e]/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl sm:px-5 md:px-8">
+      <div className="higgs-composer shrink-0 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl sm:px-5 md:px-8">
         <div className="mx-auto w-full max-w-4xl">
           <form
             onSubmit={handleSubmit}
@@ -359,7 +359,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-500 transition hover:bg-white/[0.06] hover:text-white"
+                className="higgs-control inline-flex h-8 w-8 items-center justify-center rounded-full border text-slate-300 transition hover:bg-white/[0.10] hover:text-white"
                 title="Đính kèm tệp"
               >
                 <Paperclip className="h-3.5 w-3.5" />
@@ -367,14 +367,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <button
                 type="button"
                 onClick={onOpenModelSelector}
-                className="inline-flex h-8 min-w-[108px] max-w-[38vw] shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.09] sm:max-w-[12rem]"
+                className="higgs-control inline-flex h-8 min-w-[108px] max-w-[38vw] shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.11] sm:max-w-[12rem]"
               >
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isGroq(selectedModel) ? 'bg-emerald-400' : 'bg-cyan-300'}`} />
                 <span className="min-w-0 truncate">{selectedModel.displayName || selectedModel.id.split(':').pop() || 'Model'}</span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
               </button>
 
-              <div className="flex items-center rounded-full border border-white/8 bg-black/20 p-1">
+              <div className="higgs-control flex items-center rounded-full border p-1">
                 {([
                   ['fast', 'Fast', Zap],
                   ['thinking', 'Think', Brain],
