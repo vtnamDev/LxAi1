@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
                     key={item.id}
                     type="button"
                     onClick={() => { onChangeTier(item.id); setShowTierDropdown(false); }}
-                    className={[\"w-full rounded-xl p-2 text-left transition\", tier === item.id ? \"bg-white/10 text-white\" : \"text-slate-400 hover:bg-white/5 hover:text-white\"].join(' ')}
+                    className={['w-full rounded-xl p-2 text-left transition', tier === item.id ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'].join(' ')}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold">{item.label}</span>
