@@ -786,9 +786,31 @@ app.post('/api/chat/stream', requireAuth, async (req: Request, res: Response) =>
     }
 
     // 3. Exact Model Routing (Zero Silent Substitution)
+    const modelMessages = (messages as any[]).map((message) => {
+      if (!Array.isArray(message?.attachments) || message.attachments.length === 0) {
+        return message;
+      }
+
+      const attachmentContext = message.attachments
+        .map((attachment: any) => {
+          const extracted = typeof attachment?.extractedText === 'string'
+            ? attachment.extractedText.slice(0, 30000)
+            : '';
+          if (!extracted) return '';
+          return `\n\n[Attached file: ${String(attachment.name || 'file')}]
+${extracted}`;
+        })
+        .filter(Boolean)
+        .join('');
+
+      return attachmentContext
+        ? { ...message, content: String(message.content || '') + attachmentContext }
+        : message;
+    });
+
     const stream = ModelRouter.route({
       modelId,
-      messages,
+      messages: modelMessages,
       mode,
       enableSearch: false,
       projectContext,
