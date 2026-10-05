@@ -38,46 +38,42 @@ const starterFiles: WorkspaceFile[] = [
   },
 ];
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^()|[\\]\\\\]/g, '\\\\$&');
-}
-
 function encodePreviewAsset(value: string) {
-  return value.replace(/<\\/script/gi, '<\\\\/script');
+  const closing = '</' + 'script';
+  const safeClosing = '<\\/' + 'script';
+  return value.split(closing).join(safeClosing);
 }
 
 function buildPreviewDocument(files: WorkspaceFile[]): string {
-  const normalized = files.map((file) => ({ ...file, path: file.path.replace(/^\\/+/, '') }));
+  const normalized = files.map((file) => ({ ...file, path: file.path.replace(/^\/+/, '') }));
   const html = normalized.find((file) => file.path.toLowerCase() === 'index.html')?.content;
-  const css = normalized.filter((file) => /\\.css$/i.test(file.path));
-  const js = normalized.filter((file) => /\\.(js|mjs)$/i.test(file.path));
+  const css = normalized.filter((file) => /\.css$/i.test(file.path));
+  const js = normalized.filter((file) => /\.(js|mjs)$/i.test(file.path));
+
+  const cssInline = css
+    .map((file) => '<style data-lxai-file="' + (file.path.split('/').pop() || file.path) + '">' + encodePreviewAsset(file.content) + '</style>')
+    .join('');
+
+  const jsInline = js
+    .map((file) => '<script data-lxai-file="' + (file.path.split('/').pop() || file.path) + '">' + encodePreviewAsset(file.content) + '<\\/script>')
+    .join('');
 
   if (!html) {
-    const body = normalized.find((file) => /\\.(html|htm)$/i.test(file.path))?.content;
-    if (body) return body;
-    const cssInline = css.map((file) => '<style>' + encodePreviewAsset(file.content) + '</style>').join('');
-    const jsInline = js.map((file) => '<script>' + encodePreviewAsset(file.content) + '<\\\\/script>').join('');
-    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + cssInline + '</head><body><main style="padding:24px;font-family:system-ui;color:#fff;background:#090a0f;min-height:100vh"><h1>No index.html</h1><p>Generate an index.html to enable the browser preview.</p></main>' + jsInline + '</body></html>';
+    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+      cssInline +
+      '</head><body><main style="padding:24px;font-family:system-ui;color:#fff;background:#090a0f;min-height:100vh"><h1>No index.html</h1><p>Generate an index.html to enable the browser preview.</p></main>' +
+      jsInline +
+      '</body></html>';
   }
 
   let document = html;
-  for (const file of css) {
-    const escaped = encodePreviewAsset(file.content);
-    const fileName = file.path.split('/').pop() || file.path;
-    const pattern = new RegExp('<link[^>]+href=["\\'](?:\\.\\/)?' + escapeRegExp(fileName) + '["\\'][^>]*>','ig');
-    document = document.replace(pattern, '<style data-lxai-file="' + fileName + '">' + escaped + '</style>');
-  }
-
-  for (const file of js) {
-    const escaped = encodePreviewAsset(file.content);
-    const fileName = file.path.split('/').pop() || file.path;
-    const pattern = new RegExp('<script[^>]+src=["\\'](?:\\.\\/)?' + escapeRegExp(fileName) + '["\\'][^>]*><\\\\/script>','ig');
-    document = document.replace(pattern, '<script data-lxai-file="' + fileName + '">' + escaped + '<\\\\/script>');
-  }
+  if (document.includes('</head>')) document = document.replace('</head>', cssInline + '</head>');
+  else document = cssInline + document;
 
   const bridge = '<script>(function(){function send(type,data){parent.postMessage({source:"lxai-preview",type:type,data:data||{}}, "*")}window.addEventListener("error",function(e){send("error",{message:e.message,line:e.lineno||null})});window.addEventListener("unhandledrejection",function(e){send("error",{message:String(e.reason)})});var original=console.log;console.log=function(){send("log",{message:Array.from(arguments).map(function(v){try{return typeof v==="string"?v:JSON.stringify(v)}catch{return String(v)}}).join(" ")});original.apply(console,arguments)};window.addEventListener("load",function(){send("ready",{title:document.title||"Preview"})})})();<\\/script>';
-  if (document.includes('</body>')) return document.replace('</body>', bridge + '</body>');
-  return document + bridge;
+
+  if (document.includes('</body>')) return document.replace('</body>', jsInline + bridge + '</body>');
+  return document + jsInline + bridge;
 }
 
 export const CodingStudioView: React.FC = () => {
@@ -143,9 +139,15 @@ export const CodingStudioView: React.FC = () => {
     return () => window.removeEventListener('message', handler);
   }, []);
 
+  const getWorkspaceWithEditor = () => {
+    if (!active) return workspace;
+    return workspace.map((file) => file.path === active.path ? { ...file, content: editorValue } : file);
+  };
+
   const syncEditorToWorkspace = () => {
-    if (!active) return;
-    setWorkspace((current) => current.map((file) => file.path === active.path ? { ...file, content: editorValue } : file));
+    const next = getWorkspaceWithEditor();
+    setWorkspace(next);
+    return next;
   };
 
   const selectFile = (path: string) => {
@@ -191,7 +193,7 @@ export const CodingStudioView: React.FC = () => {
   const runAgent = async () => {
     const cleanTask = task.trim();
     if (!cleanTask || isRunning || !roleModels.architect || !roleModels.builder || !roleModels.reviewer) return;
-    syncEditorToWorkspace();
+    const nextWorkspace = syncEditorToWorkspace();
     setIsRunning(true);
     setActiveTab('output');
     setPlan('');
@@ -246,7 +248,7 @@ export const CodingStudioView: React.FC = () => {
   };
 
   const downloadZip = async () => {
-    syncEditorToWorkspace();
+    const nextWorkspace = syncEditorToWorkspace();
     setIsZipping(true);
     try {
       const response = await fetch('/api/workspace/zip', {
