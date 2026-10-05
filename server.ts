@@ -548,7 +548,10 @@ app.get('/api/models', async (_req: Request, res: Response) => {
     ...nvidiaModels,
     ...xKiroModels,
     ...cloudflareModels,
-  ].map((m) => [m.id, m])).values());
+  ].map((m) => [m.id, m])).values()).map((model) => ({
+    ...model,
+    isDefault: model.id === 'groq:openai/gpt-oss-20b',
+  }));
 
   const providerStatus = ServerConfig.getProviderStatus();
   modelCatalogCache = {
