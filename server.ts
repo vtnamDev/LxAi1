@@ -297,6 +297,48 @@ async function listOpenAICompatibleModels(
   return [];
 }
 
+const CLOUDFLARE_PAID_ONLY_MODELS = new Set([
+  '@cf/moonshotai/kimi-k2.6',
+  '@cf/moonshotai/kimi-k2.7-code',
+  '@cf/zai-org/glm-5.2',
+  '@cf/zai-org/glm-5.3',
+  '@cf/zai-org/glm-5.3-flash',
+  '@cf/deepseek-ai/deepseek-v4-flash-0731',
+  '@cf/deepseek-ai/deepseek-v4-pro-0813',
+]);
+
+async function listCloudflareFreeModels(): Promise<CatalogModel[]> {
+  const token = ServerConfig.cloudflareApiToken;
+  const accountId = ServerConfig.cloudflareAccountId;
+  if (!token || !accountId) return [];
+
+  try {
+    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/models/search?per_page=100&hide_experimental=true&include_deprecated=false`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!response.ok) return [];
+
+    const data: any = await response.json();
+    const items = Array.isArray(data?.result) ? data.result : [];
+    return items
+      .map((item: any) => ({
+        id: String(item?.name || item?.id || ''),
+        name: item?.display_name || item?.name || item?.id,
+        context_length: Number(item?.context_length || item?.context_window || 0) || undefined,
+      }))
+      .filter((item: CatalogModel) =>
+        item.id &&
+        !CLOUDFLARE_PAID_ONLY_MODELS.has(item.id) &&
+        !/(embedding|moderation|classification|rerank|image|audio|speech|tts|whisper)/i.test(item.id)
+      )
+      .slice(0, 60);
+  } catch {
+    return [];
+  }
+}
+
 function mapCatalog(provider: string, items: CatalogModel[], prefix: string, limit = 80): ModelInfo[] {
   return items
     .filter((m) => {
@@ -398,6 +440,16 @@ app.get('/api/models', async (_req: Request, res: Response) => {
     'xkiro:',
     40,
   ));
+
+  models.push(...mapCatalog(
+    'Cloudflare Workers AI',
+    await listCloudflareFreeModels(),
+    'cloudflare:',
+    60,
+  ).map((m) => ({
+    ...m,
+    description: 'Cloudflare Workers AI model available through the Workers Free allocation when capacity permits.',
+  })));
 
   const unique = Array.from(new Map(models.map((m) => [m.id, m])).values());
   res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
