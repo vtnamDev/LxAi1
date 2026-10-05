@@ -46,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-3 flex-1 max-w-xl">
         <button
           onClick={onToggleMobileMenu}
-          className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 lg:hidden cursor-pointer"
+          className="p-2 rounded-full text-slate-300 hover:text-white hover:bg-white/10 lg:hidden cursor-pointer"
           aria-label="Toggle menu"
         >
           <Menu className="w-5 h-5" />
@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Global Search trigger bar */}
         <button
           onClick={onOpenSearch}
-          className="flex-1 max-w-[22rem] flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.025] border border-white/8 hover:bg-white/[0.05] hover:border-white/12 text-slate-500 hover:text-slate-200 transition-all text-xs cursor-pointer group"
+          className="flex-1 max-w-[22rem] flex items-center justify-between px-3 py-2 rounded-full bg-white/[0.025] border border-white/8 hover:bg-white/[0.05] hover:border-white/12 text-slate-500 hover:text-slate-200 transition-all text-xs cursor-pointer group"
         >
           <div className="flex items-center gap-2">
             <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-400 transition-colors" />
@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Quick Voice Partner Action Button */}
         <button
           onClick={onOpenVoicePartner}
-          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.035] hover:bg-white/[0.06] border border-white/9 text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.035] hover:bg-white/[0.06] border border-white/9 text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
           title="Start real-time voice conversation partner"
         >
           <span className="relative flex h-2 w-2">
@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="relative">
           <button
             onClick={() => setShowTierDropdown(!showTierDropdown)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.035] border border-white/9 hover:bg-white/[0.06] text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/[0.035] border border-white/9 hover:bg-white/[0.06] text-slate-300 text-xs font-medium transition-colors cursor-pointer"
             title="Dynamic Glass Performance Tier"
           >
             <Sliders className="w-3.5 h-3.5 text-cyan-400" />
@@ -127,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Theme Toggle */}
         <button
           onClick={onToggleTheme}
-          className="p-2 rounded-lg bg-white/[0.035] border border-white/9 hover:bg-white/[0.06] text-slate-300 hover:text-white transition-colors cursor-pointer"
+          className="p-2 rounded-full bg-white/[0.035] border border-white/9 hover:bg-white/[0.06] text-slate-300 hover:text-white transition-colors cursor-pointer"
           title={`Theme: ${theme}`}
         >
           {theme === 'cosmic' ? <Moon className="w-4 h-4 text-cyan-300" /> : <Sun className="w-4 h-4 text-amber-300" />}
@@ -137,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white transition-colors relative cursor-pointer"
+            className="p-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white transition-colors relative cursor-pointer"
             title="Notifications"
           >
             <Bell className="w-4 h-4" />
