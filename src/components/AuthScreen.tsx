@@ -29,7 +29,14 @@ declare global {
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const onLoginRef = useRef(onLogin);
+  const googleRenderedRef = useRef(false);
+  const googleScriptRef = useRef<HTMLScriptElement | null>(null);
   const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    onLoginRef.current = onLogin;
+  }, [onLogin]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -48,8 +55,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         setGoogleClientId(config.clientId);
 
         const render = () => {
-          if (cancelled || !googleButtonRef.current || !window.google) return;
-          googleButtonRef.current.innerHTML = '';
+          if (
+            cancelled ||
+            googleRenderedRef.current ||
+            !googleButtonRef.current ||
+            !window.google
+          ) return;
+
+          googleRenderedRef.current = true;
           window.google.accounts.id.initialize({
             client_id: config.clientId,
             callback: async ({ credential }) => {
@@ -65,7 +78,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
                 if (!res.ok) throw new Error(data.error || 'Google authentication failed.');
                 localStorage.setItem('lx_session_token', data.sessionToken);
                 localStorage.setItem('lx_ai_user', JSON.stringify(data.user));
-                onLogin(data.user, data.sessionToken);
+                onLoginRef.current(data.user, data.sessionToken);
               } catch (err: any) {
                 setErrorMessage(err?.message || 'Google authentication failed.');
               } finally {
@@ -92,13 +105,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
           return;
         }
 
-        const script = document.createElement('script');
-        script.src = 'https://accounts.google.com/gsi/client';
-        script.async = true;
-        script.defer = true;
-        script.onload = render;
-        script.onerror = () => setErrorMessage('Không tải được Google Sign-In. Kiểm tra kết nối mạng.');
-        document.head.appendChild(script);
+        const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]') as HTMLScriptElement | null;
+        const script = existingScript || document.createElement('script');
+        googleScriptRef.current = script;
+
+        if (!existingScript) {
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true;
+          script.defer = true;
+          script.onload = render;
+          script.onerror = () => setErrorMessage('Không tải được Google Sign-In. Kiểm tra kết nối mạng.');
+          document.head.appendChild(script);
+        } else if (window.google) {
+          render();
+        } else {
+          script.addEventListener('load', render, { once: true });
+        }
       } catch (err: any) {
         if (!cancelled) setErrorMessage(err?.message || 'Không thể khởi tạo Google Sign-In.');
       } finally {
@@ -110,7 +132,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
     return () => {
       cancelled = true;
     };
-  }, [onLogin]);
+  }, []);
 
   const handleGuest = async () => {
     setProcessing(true);
@@ -121,7 +143,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
       if (!res.ok) throw new Error(data.error || 'Guest access failed.');
       localStorage.setItem('lx_session_token', data.sessionToken);
       localStorage.setItem('lx_ai_user', JSON.stringify(data.user));
-      onLogin(data.user, data.sessionToken);
+      onLoginRef.current(data.user, data.sessionToken);
     } catch (err: any) {
       setErrorMessage(err?.message || 'Guest access failed.');
     } finally {
