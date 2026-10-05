@@ -101,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onNewChat();
               onCloseMobile();
             }}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-medium text-sm text-white bg-white text-slate-950 hover:bg-slate-100 shadow-lg shadow-black/20 transition-all duration-200 cursor-pointer active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full font-medium text-sm text-white bg-white text-slate-950 hover:bg-slate-100 shadow-lg shadow-black/20 transition-all duration-200 cursor-pointer active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
             <span>New Chat</span>
