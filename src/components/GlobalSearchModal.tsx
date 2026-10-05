@@ -20,12 +20,22 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onSelectModel,
 }) => {
   const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'chats' | 'models'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'chats' | 'models' | 'files'>('all');
+  const [files, setFiles] = useState<Array<{ id: string; name: string; type: string; size: number }>>([]);
 
   useEffect(() => {
     if (!isOpen) return;
     setQuery('');
     setActiveTab('all');
+
+    const token = localStorage.getItem('lx_session_token');
+    fetch('/api/files', {
+      headers: token ? { Authorization: 'Bearer ' + token } : {},
+      cache: 'no-store',
+    })
+      .then((response) => response.ok ? response.json() : { files: [] })
+      .then((data) => setFiles(Array.isArray(data.files) ? data.files.slice(0, 50) : []))
+      .catch(() => setFiles([]));
   }, [isOpen]);
 
   const normalized = query.trim().toLowerCase();
@@ -39,6 +49,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       )
       .slice(0, 16);
   }, [conversations, normalized]);
+
+  const fileResults = useMemo(() => {
+    if (!normalized) return files.slice(0, 12);
+    return files
+      .filter((file) => file.name.toLowerCase().includes(normalized) || file.type.toLowerCase().includes(normalized))
+      .slice(0, 16);
+  }, [files, normalized]);
 
   const modelResults = useMemo(() => {
     if (!normalized) return models.slice(0, 12);
@@ -92,6 +109,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             ['all', 'Tất cả'],
             ['chats', 'Cuộc trò chuyện'],
             ['models', 'Models'],
+            ['files', 'Files'],
           ] as const).map(([id, label]) => (
             <button
               key={id}
@@ -157,10 +175,34 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             </section>
           )}
 
+          {(activeTab === 'all' || activeTab === 'files') && (
+            <section className="mt-4">
+              <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-600">Files</div>
+              <div className="space-y-1">
+                {fileResults.map((file) => (
+                  <button
+                    key={file.id}
+                    onClick={onClose}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-white/[0.05]"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-white/[0.03]">
+                      <FileText className="h-4 w-4 text-cyan-300" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-white">{file.name}</span>
+                      <span className="block truncate text-[11px] text-slate-500">{file.type || 'file'} · {Math.max(1, Math.round(file.size / 1024))} KB</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {fileResults.length === 0 && <div className="px-3 py-6 text-xs text-slate-600">Không tìm thấy file.</div>}
+            </section>
+          )}
+
           <div className="mt-3 border-t border-white/8 pt-3">
             <div className="flex items-center gap-2 px-2 text-[10px] text-slate-600">
               <FileText className="h-3.5 w-3.5" />
-              File search sẽ dùng cùng index workspace khi library indexing được bật.
+              File search is connected to the LX AI workspace file library.
             </div>
           </div>
         </div>
