@@ -1,6 +1,7 @@
 /**
  * LX AI — Centralized Server Configuration Layer
  * Secrets are read only from environment variables. Never hardcode credentials.
+ * Tavily web search uses the TAVILY_KEY_N pool with server-side rotation.
  */
 
 export interface ProviderStatus {
