@@ -19,6 +19,7 @@ export interface StreamParams {
   mode: 'fast' | 'thinking' | 'auto';
   enableSearch?: boolean;
   projectContext?: string;
+  webContext?: string;
   signal?: AbortSignal;
 }
 
@@ -69,6 +70,10 @@ Provide articulate, concise, and helpful responses. Format code in markdown code
 
     if (params.projectContext) {
       systemInstruction += `\n\n<project_context>\n${params.projectContext}\n</project_context>`;
+    }
+
+    if (params.webContext) {
+      systemInstruction += `\n\n<web_research>\nUse the verified web research below as the factual grounding for current or time-sensitive claims. Prefer these sources over memory. Do not invent citations or URLs.\n${params.webContext}\n</web_research>`;
     }
 
     const contents = params.messages.map((m) => {
@@ -147,6 +152,9 @@ async function* streamOpenAICompatible(
 ): AsyncIterable<StreamChunk> {
   let systemMessage = `You are LX AI, an advanced personal AI workspace assistant.`;
   if (params.projectContext) systemMessage += `\n\nContext:\n${params.projectContext}`;
+  if (params.webContext) {
+    systemMessage += `\n\nVerified web research from Tavily:\n${params.webContext}`;
+  }
 
   const messages = [
     { role: 'system', content: systemMessage },
