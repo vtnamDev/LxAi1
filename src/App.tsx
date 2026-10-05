@@ -230,7 +230,7 @@ export default function App() {
 
   const fetchModels = async () => {
     try {
-      const res = await fetch('/api/models', { cache: 'no-store' });
+      const res = await fetch('/api/models');
       const data = await res.json();
       if (data.models && Array.isArray(data.models) && data.models.length > 0) {
         const liveModels = data.models as ModelInfo[];
