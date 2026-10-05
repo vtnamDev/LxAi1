@@ -442,3 +442,162 @@ textarea {
     display: none;
   }
 }
+
+
+/* LX AI — Higgsfield-inspired visual refinement
+   Bright pearl surfaces, cinematic gradients, soft optical bloom and restrained motion.
+   No heavy WebGL layer: keeps the mobile bundle and GPU cost predictable. */
+:root {
+  --bg-base: #090a0f;
+  --text-primary: #f7f8fc;
+  --text-secondary: #b9becb;
+  --text-muted: #777e8d;
+  --higgs-pearl: rgba(255,255,255,.075);
+  --higgs-pearl-strong: rgba(255,255,255,.11);
+  --higgs-indigo: rgba(150,140,255,.20);
+  --higgs-cyan: rgba(99,227,255,.13);
+}
+
+.cosmic-bg,
+.cosmic-sunset-bg {
+  background:
+    radial-gradient(720px 460px at 8% -6%, rgba(255,255,255,.06), transparent 58%),
+    radial-gradient(700px 420px at 98% 5%, rgba(155,143,255,.11), transparent 62%),
+    radial-gradient(620px 420px at 50% 108%, rgba(74,220,255,.055), transparent 64%),
+    #090a0f;
+}
+
+.cosmic-bg::before,
+.cosmic-sunset-bg::before {
+  background:
+    radial-gradient(420px 240px at 20% 18%, rgba(255,255,255,.05), transparent 66%),
+    radial-gradient(520px 280px at 82% 58%, rgba(144,132,255,.055), transparent 68%),
+    radial-gradient(420px 220px at 45% 85%, rgba(91,221,255,.035), transparent 70%);
+  filter: blur(48px);
+  opacity: .95;
+  animation: lxAurora 22s ease-in-out infinite alternate;
+}
+
+.glass-shell {
+  background: linear-gradient(180deg, rgba(24,26,33,.88), rgba(14,16,22,.86));
+  border-color: rgba(255,255,255,.095);
+  box-shadow: 0 18px 65px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.glass-card {
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+  border-color: rgba(255,255,255,.085);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+.glass-elevated {
+  background:
+    radial-gradient(500px 220px at 10% 0%, rgba(255,255,255,.075), transparent 68%),
+    linear-gradient(145deg, rgba(30,31,41,.88), rgba(16,18,25,.84));
+  border-color: rgba(255,255,255,.12);
+  box-shadow:
+    0 28px 95px rgba(0,0,0,.34),
+    0 1px 0 rgba(255,255,255,.06) inset,
+    0 0 0 1px rgba(255,255,255,.015);
+}
+
+.dynamic-glass {
+  background:
+    radial-gradient(520px 240px at var(--liquid-x) var(--liquid-y), rgba(255,255,255,.15), transparent 66%),
+    radial-gradient(360px 200px at 92% 16%, rgba(149,140,255,.13), transparent 70%),
+    linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.03) 38%, rgba(255,255,255,.045));
+  border-color: rgba(255,255,255,.17);
+  box-shadow:
+    0 30px 90px rgba(0,0,0,.34),
+    0 1px 0 rgba(255,255,255,.095) inset,
+    0 -20px 60px rgba(147,134,255,.035) inset;
+}
+
+.dynamic-glass::before {
+  background:
+    radial-gradient(280px 190px at var(--liquid-x) var(--liquid-y), rgba(255,255,255,.20), transparent 62%),
+    radial-gradient(220px 160px at 82% 22%, rgba(117,219,255,.09), transparent 68%),
+    conic-gradient(from 205deg at 74% 24%, transparent, rgba(166,150,255,.08), transparent 28%, rgba(103,224,255,.06), transparent 55%);
+  filter: blur(24px);
+  opacity: .9;
+  animation: lxHiggsBloom 13s ease-in-out infinite alternate;
+}
+
+.dynamic-glass::after {
+  background:
+    radial-gradient(340px 220px at var(--liquid-x) var(--liquid-y), rgba(255,255,255,.30), transparent 64%),
+    linear-gradient(112deg, rgba(255,255,255,.24), rgba(255,255,255,.05) 34%, rgba(255,255,255,.012) 62%, rgba(173,159,255,.20));
+  opacity: .95;
+}
+
+@keyframes lxHiggsBloom {
+  0% { transform: translate3d(-1%, -1%, 0) scale(1); opacity: .7; }
+  100% { transform: translate3d(2%, 1%, 0) scale(1.06); opacity: .95; }
+}
+
+.higgs-hero-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  filter: blur(1px);
+  mix-blend-mode: screen;
+  opacity: .8;
+  animation: lxOrbFloat 14s ease-in-out infinite alternate;
+}
+
+.higgs-hero-orb--a {
+  width: 18rem; height: 18rem; right: 3%; top: 8%;
+  background: radial-gradient(circle, rgba(174,161,255,.16), rgba(174,161,255,.035) 48%, transparent 72%);
+}
+
+.higgs-hero-orb--b {
+  width: 14rem; height: 14rem; left: -2%; bottom: 18%;
+  background: radial-gradient(circle, rgba(103,223,255,.12), rgba(103,223,255,.025) 48%, transparent 72%);
+  animation-delay: -5s;
+}
+
+@keyframes lxOrbFloat {
+  from { transform: translate3d(0,0,0) scale(1); }
+  to { transform: translate3d(14px,-10px,0) scale(1.05); }
+}
+
+.higgs-chip {
+  background: rgba(255,255,255,.045);
+  border-color: rgba(255,255,255,.09);
+  color: #b9c0cc;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+  transition: transform 180ms ease, background 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.higgs-chip:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,.075);
+  border-color: rgba(255,255,255,.15);
+  color: #fff;
+}
+
+.higgs-control {
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.035));
+  border-color: rgba(255,255,255,.105);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.higgs-composer {
+  background:
+    radial-gradient(460px 180px at 50% 0%, rgba(255,255,255,.04), transparent 70%),
+    linear-gradient(180deg, rgba(14,15,21,.94), rgba(9,10,15,.97));
+  border-color: rgba(255,255,255,.10);
+  box-shadow: 0 -18px 55px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dynamic-glass::before,
+  .higgs-hero-orb {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .dynamic-glass::before { opacity: .64; }
+  .higgs-hero-orb { opacity: .45; }
+}
