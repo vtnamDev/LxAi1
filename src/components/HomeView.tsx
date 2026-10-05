@@ -82,9 +82,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
   };
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-5xl flex-col px-4 pb-6 pt-6 sm:px-6 sm:pt-8">
-        <div className="flex flex-1 flex-col justify-center">
+    <div className="relative flex-1 min-h-0 overflow-y-auto">
+      <div className="relative mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-5xl flex-col overflow-hidden px-4 pb-6 pt-6 sm:px-6 sm:pt-8">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden"><span className="higgs-hero-orb higgs-hero-orb--a" /><span className="higgs-hero-orb higgs-hero-orb--b" /></div><div className="relative z-10 flex flex-1 flex-col justify-center">
           <div className="mx-auto w-full max-w-3xl">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
@@ -94,7 +94,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <span className="text-slate-600">•</span>
                   <span>{isDefaultGroq(selectedModel) ? 'Default model' : 'Live routing'}</span>
                 </div>
-                <h1 className="mt-2 text-[clamp(1.85rem,5vw,3.15rem)] font-semibold tracking-[-0.045em] text-white">
+                <h1 className="mt-2 bg-gradient-to-r from-white via-slate-100 to-violet-200 bg-clip-text text-[clamp(1.85rem,5vw,3.15rem)] font-semibold tracking-[-0.05em] text-transparent drop-shadow-[0_10px_35px_rgba(178,160,255,.10)]">
                   What can I help you build?
                 </h1>
               </div>
@@ -109,7 +109,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
             <div
-              className="dynamic-glass glass-elevated rounded-[24px] border border-white/12"
+              className="dynamic-glass glass-elevated rounded-[28px] border border-white/15 ring-1 ring-white/[0.025]"
               onPointerMove={updateGlass}
               onPointerLeave={resetGlass}
             >
@@ -179,7 +179,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onNavigate('files')}
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/8 bg-white/[0.025] text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                      className="higgs-control flex h-9 w-9 items-center justify-center rounded-full border text-slate-300 transition hover:bg-white/[0.10] hover:text-white"
                       title="Files"
                     >
                       <Paperclip className="h-4 w-4" />
@@ -221,7 +221,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   key={label}
                   type="button"
                   onClick={action}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/8 bg-white/[0.02] px-3 py-2 text-xs text-slate-400 hover:border-white/14 hover:bg-white/[0.045] hover:text-white"
+                  className="higgs-chip inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs"
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {label}
@@ -257,7 +257,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   key={conversation.id}
                   type="button"
                   onClick={() => onSelectConversation(conversation.id)}
-                  className="group rounded-xl border border-white/8 bg-[#0d1014]/90 p-3 text-left hover:border-white/14 hover:bg-[#11151a]"
+                  className="higgs-chip group rounded-2xl border p-3 text-left"
                 >
                   <div className="flex items-center gap-2 text-[10px] text-slate-600">
                     <MessageSquare className="h-3 w-3" />
