@@ -515,7 +515,10 @@ export default function App() {
         } else if (err?.status === 429 || code === 'QUOTA_EXCEEDED' || code === 'RATE_LIMITED') {
           message = '⚠️ Your AI quota or provider rate limit has been reached. Please try again later.';
         } else if (code === 'MODEL_NOT_FOUND' || code === 'MODEL_UNSUPPORTED') {
-          message = '⚠️ The selected model is unavailable for this chat route. Please choose a verified model.';
+          message = '⚠️ The selected model is unavailable. LX AI has returned to the verified Groq default.';
+          setSelectedModel(DEFAULT_GROQ_MODEL);
+          try { localStorage.setItem('lx_selected_model', DEFAULT_GROQ_MODEL.id); } catch {}
+
         } else if (code === 'PROVIDER_NETWORK_ERROR') {
           message = '⚠️ The AI provider could not be reached. Check provider status and try again.';
         } else if (code === 'PROVIDER_UNAVAILABLE') {
@@ -698,10 +701,10 @@ export default function App() {
         selectedModelId={selectedModel.id}
         onSelectModel={(id) => {
           const found = models.find((m) => m.id === id);
-          if (found) {
-            setSelectedModel(found);
-            try { localStorage.setItem('lx_selected_model', found.id); } catch {}
-          }
+          if (!found) return;
+          setSelectedModel(found);
+          try { localStorage.setItem('lx_selected_model', found.id); } catch {}
+          setIsModelSelectorOpen(false);
         }}
       />
 
