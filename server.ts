@@ -1534,7 +1534,7 @@ app.post('/api/chat/stream', requireAuth, async (req: Request, res: Response) =>
   }
 
   // 1. Atomic Per-User Quota Reservation
-  const estimatedReservation = 500;
+  const estimatedReservation = mode === 'council' ? 60000 : 500;
   const reservation = Database.reserveBudget(user.id, estimatedReservation);
   if (!reservation.allowed) {
     return res.status(429).json({
@@ -1636,6 +1636,76 @@ ${extracted}`;
         ? { ...message, content: String(message.content || '') + attachmentContext }
         : message;
     });
+
+    if (mode === 'council') {
+      try {
+        const council = await runCouncil(
+          modelMessages,
+          modelId,
+          webContext,
+          abortController.signal,
+          sendEvent,
+        );
+
+        if (abortController.signal.aborted) {
+          releaseReservationOnce();
+          return res.end();
+        }
+
+        totalChars += council.totalChars;
+
+        // Keep quota accounting honest and bounded by the reserved council budget.
+        const estimatedTokens = Math.min(
+          estimatedReservation,
+          Math.max(100, Math.ceil(totalChars / 4)),
+        );
+
+        Database.commitUsage(user.id, estimatedTokens, estimatedReservation);
+        reservationOpen = false;
+
+        const updatedQuota = Database.getQuota(user.id);
+
+        sendEvent('reasoning.delta', { text: council.reasoning + '\n' });
+        sendEvent('message.delta', { text: council.answer });
+        sendEvent('usage.recorded', {
+          requestId,
+          generationId,
+          inputTokens: Math.ceil(messages.map((m: any) => m.content?.length || 0).reduce((a: number, b: number) => a + b, 0) / 4),
+          outputTokens: estimatedTokens,
+          totalTokens: estimatedTokens,
+          quotaRemaining: Math.max(0, updatedQuota.limitTokens - updatedQuota.usedTokens),
+          council: true,
+        });
+
+        generationCompleted = true;
+
+        sendEvent('message.completed', {
+          requestId,
+          generationId,
+          messageId: 'msg_' + Date.now(),
+          finishReason: 'council_stop',
+        });
+
+        return res.end();
+      } catch (err: any) {
+        releaseReservationOnce();
+
+        if (abortController.signal.aborted) return res.end();
+
+        const providerError = err instanceof ProviderError ? err : null;
+
+        sendEvent('generation.failed', {
+          requestId,
+          generationId,
+          error: providerError?.message || err?.message || 'The AI council could not complete the request.',
+          code: providerError?.code || 'COUNCIL_ERROR',
+          status: providerError?.status || 502,
+          recoverable: (providerError?.status || 502) >= 500,
+        });
+
+        return res.end();
+      }
+    }
 
     const stream = ModelRouter.route({
       modelId,
