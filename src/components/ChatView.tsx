@@ -134,7 +134,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   isStreaming,
 }) => {
   const [inputText, setInputText] = useState('');
-  const [mode, setMode] = useState<ModeType>(conversation?.mode || 'fast');
+  const [mode, setMode] = useState<ModeType>(conversation?.mode || 'council');
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const [expandedReasoningIds, setExpandedReasoningIds] = useState<Record<string, boolean>>({});
@@ -352,8 +352,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 placeholder="Message LX AI…"
                 className="min-h-[54px] max-h-40 min-w-0 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] leading-6 text-white outline-none placeholder:text-slate-600"
               />
-              <button type="button" onClick={() => { setMode(mode === 'fast' ? 'thinking' : mode === 'thinking' ? 'auto' : 'fast'); }} className="mb-1 hidden rounded-full border border-white/8 bg-white/4 px-2.5 py-1.5 text-[10px] font-semibold text-slate-400 hover:text-white sm:block" title="Cycle mode">
-                {mode === 'fast' ? 'Fast' : mode === 'thinking' ? 'Think' : 'Auto'}
+              <button type="button" onClick={() => { setMode(mode === 'fast' ? 'thinking' : mode === 'thinking' ? 'council' : 'fast'); }} className="mb-1 hidden rounded-full border border-white/8 bg-white/4 px-2.5 py-1.5 text-[10px] font-semibold text-slate-400 hover:text-white sm:block" title="Cycle mode">
+                {mode === 'fast' ? 'Fast' : mode === 'thinking' ? 'Think' : 'Council'}
               </button>
               {isStreaming ? (
                 <button type="button" onClick={onStopGeneration} className="mb-1 flex h-11 shrink-0 items-center gap-2 rounded-full border border-rose-300/15 bg-rose-300/10 px-4 text-xs font-bold text-rose-100"><Square className="h-3.5 w-3.5 fill-current" /> Stop</button>
@@ -366,7 +366,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <div className="flex items-center gap-2 text-[10px] text-slate-600">
                 <span>Enter to send</span>
                 <span className="text-slate-700">•</span>
-                <span>{mode === 'fast' ? 'Fast' : mode === 'thinking' ? 'Deep reasoning' : 'Auto'} mode</span>
+                <span>{mode === 'fast' ? 'Fast' : mode === 'thinking' ? 'Deep reasoning' : 'All-model council'} mode</span>
               </div>
               <button type="button" onClick={onClearChat} className="rounded-lg p-1.5 text-slate-600 hover:bg-rose-500/10 hover:text-rose-300" title="Clear chat"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
