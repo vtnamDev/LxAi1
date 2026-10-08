@@ -1,4 +1,4 @@
-export type ModeType = 'fast' | 'thinking' | 'auto';
+export type ModeType = 'fast' | 'thinking' | 'council';
 export type PerformanceTier = 'full' | 'balanced' | 'lite' | 'minimal';
 export type ViewType = 'home' | 'chat' | 'coding' | 'projects' | 'files' | 'models' | 'utilities' | 'telegram' | 'settings';
 
