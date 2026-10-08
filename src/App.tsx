@@ -323,7 +323,7 @@ export default function App() {
       id: newId,
       title: 'New Conversation',
       modelId: selectedModel.id,
-      mode: 'fast',
+      mode: 'council',
       messages: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
