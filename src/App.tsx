@@ -492,6 +492,56 @@ export default function App() {
             setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
               ...c, messages: c.messages.map((m) => m.id === assistantMessageId ? { ...m, sources: data.sources } : m),
             }));
+          } else if (currentEvent === 'council.started') {
+            const count = Number(data.participantCount || 0);
+            setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
+              ...c,
+              messages: c.messages.map((m) => m.id === assistantMessageId
+                ? { ...m, reasoningContent: 'LX AI Council started. Inviting ' + count + ' live models…\n' }
+                : m),
+            }));
+          } else if (currentEvent === 'council.thought') {
+            if (data.status === 'responded') {
+              setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
+                ...c,
+                messages: c.messages.map((m) => m.id === assistantMessageId
+                  ? {
+                      ...m,
+                      reasoningContent: ((m.reasoningContent || '').length > 12000
+                        ? m.reasoningContent || ''
+                        : (m.reasoningContent || '') + '• ' + String(data.provider || '') + ' / ' + String(data.displayName || data.modelId || '') + ': ' + String(data.text || '').replace(/\s+/g, ' ').slice(0, 240) + '\n')
+                    }
+                  : m),
+              }));
+            }
+          } else if (currentEvent === 'council.debate.started') {
+            setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
+              ...c,
+              messages: c.messages.map((m) => m.id === assistantMessageId
+                ? { ...m, reasoningContent: (m.reasoningContent || '') + '\n— Peer debate started —\n' }
+                : m),
+            }));
+          } else if (currentEvent === 'council.debate') {
+            if (data.status === 'responded') {
+              setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
+                ...c,
+                messages: c.messages.map((m) => m.id === assistantMessageId
+                  ? { ...m, reasoningContent: (m.reasoningContent || '').slice(0, 16000) + 'JUROR • ' + String(data.provider || '') + ' / ' + String(data.displayName || data.modelId || '') + ': ' + String(data.text || '').replace(/\s+/g, ' ').slice(0, 360) + '\n' }
+                  : m),
+              }));
+            }
+          } else if (currentEvent === 'council.completed') {
+            setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
+              ...c,
+              messages: c.messages.map((m) => m.id === assistantMessageId
+                ? {
+                    ...m,
+                    reasoningContent: (m.reasoningContent || '') +
+                      '\nCouncil complete: ' + String(data.respondedCount || 0) + '/' + String(data.participantCount || 0) +
+                      ' models responded; final arbiter: ' + String(data.finalModelId || 'unknown') + '.\n'
+                  }
+                : m),
+            }));
           } else if (currentEvent === 'usage.recorded') {
             fetchQuota();
           } else if (currentEvent === 'message.completed') {
