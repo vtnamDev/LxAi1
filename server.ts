@@ -908,6 +908,7 @@ async function collectAgentModelText(
   modelId: string,
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   signal?: AbortSignal,
+  maxChars = 6000,
 ): Promise<{ text: string; reasoning: string }> {
   const stream = ModelRouter.route({
     modelId,
@@ -921,11 +922,15 @@ async function collectAgentModelText(
   let reasoning = '';
   for await (const chunk of stream) {
     if (signal?.aborted) break;
-    if (chunk.text) text += chunk.text;
+    if (chunk.text) {
+      text += chunk.text;
+      if (text.length >= maxChars) break;
+    }
     if (chunk.reasoningText) reasoning += chunk.reasoningText;
+    if (reasoning.length > maxChars) reasoning = reasoning.slice(0, maxChars);
   }
 
-  return { text, reasoning };
+  return { text: text.slice(0, maxChars), reasoning: reasoning.slice(0, maxChars) };
 }
 
 function summarizeWorkspace(files: AgentWorkspaceFile[]): string {
