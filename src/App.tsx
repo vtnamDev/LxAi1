@@ -123,7 +123,7 @@ export default function App() {
         id: 'conv_initial',
         title: 'Welcome to LX AI Workspace',
         modelId: 'groq:openai/gpt-oss-20b',
-        mode: 'fast',
+        mode: 'council',
         messages: [
           {
             id: 'm1',
