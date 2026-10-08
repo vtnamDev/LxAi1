@@ -1525,7 +1525,7 @@ async function runCouncil(
 // -------------------------------------------------------------
 app.post('/api/chat/stream', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as User;
-  const { messages, modelId = 'gemini-3.8-flash', mode = 'fast', enableSearch, projectContext, turnstileToken } = req.body;
+  const { messages, modelId = 'groq:openai/gpt-oss-20b', mode = 'council', enableSearch, projectContext, turnstileToken } = req.body;
 
   if (!(await requireTurnstile(req, res, turnstileToken, 'chat'))) return;
 
