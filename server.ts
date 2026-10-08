@@ -1171,6 +1171,355 @@ app.post('/api/workspace/zip', requireAuth, async (req: Request, res: Response) 
   }
 });
 
+
+type CouncilParticipant = {
+  id: string;
+  provider: string;
+  displayName: string;
+  capabilities: string[];
+};
+
+type CouncilResponse = {
+  model: CouncilParticipant;
+  text: string;
+  reasoning: string;
+  ok: boolean;
+  error?: string;
+};
+
+function getCouncilParticipants(): CouncilParticipant[] {
+  const models = modelCatalogCache?.models || [];
+  return models
+    .filter((model) =>
+      (model.status === 'active' || model.status === 'configured')
+      && model.capabilities.includes('text')
+      && !/(:batch$|embed|embedding|rerank|moderation|safety|whisper|tts|audio|image)/i.test(
+        model.id + ' ' + model.displayName + ' ' + model.description
+      )
+    )
+    .map((model) => ({
+      id: model.id,
+      provider: model.provider,
+      displayName: model.displayName,
+      capabilities: model.capabilities,
+    }))
+    .filter((model, index, all) => all.findIndex((candidate) => candidate.id === model.id) === index);
+}
+
+function pickCouncilJurors(participants: CouncilParticipant[], preferredModelId: string): CouncilParticipant[] {
+  const selected: CouncilParticipant[] = [];
+  const providers = new Set<string>();
+
+  const preferred = participants.find((model) => model.id === preferredModelId);
+  if (preferred) {
+    selected.push(preferred);
+    providers.add(preferred.provider);
+  }
+
+  for (const model of participants) {
+    if (selected.length >= 8) break;
+    if (providers.has(model.provider)) continue;
+    if (!model.capabilities.includes('reasoning') && !model.capabilities.includes('code')) continue;
+    selected.push(model);
+    providers.add(model.provider);
+  }
+
+  for (const model of participants) {
+    if (selected.length >= 8) break;
+    if (selected.some((item) => item.id === model.id)) continue;
+    if (model.capabilities.includes('reasoning')) selected.push(model);
+  }
+
+  return selected.slice(0, 8);
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+  signal?: AbortSignal,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+
+  const runners = Array.from(
+    { length: Math.min(concurrency, Math.max(1, items.length)) },
+    async () => {
+      while (!signal?.aborted) {
+        const index = cursor++;
+        if (index >= items.length) return;
+        results[index] = await worker(items[index], index);
+      }
+    },
+  );
+
+  await Promise.all(runners);
+  return results;
+}
+
+function councilDigest(responses: CouncilResponse[]): string {
+  return responses
+    .filter((response) => response.ok && response.text.trim())
+    .map((response, index) => {
+      const compact = response.text.replace(/\s+/g, ' ').trim().slice(0, 220);
+      return '[' + (index + 1) + '] ' + response.model.provider + ' / ' + response.model.displayName + ': ' + compact;
+    })
+    .join('\n');
+}
+
+async function runCouncil(
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
+  preferredModelId: string,
+  webContext: string,
+  signal: AbortSignal,
+  sendEvent: (event: string, data: any) => void,
+): Promise<{ answer: string; reasoning: string; totalChars: number }> {
+  const participants = getCouncilParticipants();
+  if (!participants.length) {
+    throw new ProviderError('The model council has no live text models available.', 'COUNCIL_NO_MODELS', 503);
+  }
+
+  sendEvent('council.started', {
+    participantCount: participants.length,
+    message: 'Tất cả model text đang được mời vào hội đồng.',
+  });
+
+  const userPrompt = [...messages].reverse().find((message) => message.role === 'user')?.content || '';
+  const sharedContext = webContext
+    ? '\n\nREAL WEB RESEARCH CONTEXT:\n' + webContext.slice(0, 16000)
+    : '';
+
+  const responses = await runWithConcurrency(
+    participants,
+    24,
+    async (participant) => {
+      if (signal.aborted) {
+        return { model: participant, text: '', reasoning: '', ok: false, error: 'cancelled' };
+      }
+
+      const localSignal = AbortSignal.any([signal, AbortSignal.timeout(15000)]);
+      try {
+        const result = await collectAgentModelText(
+          participant.id,
+          [
+            {
+              role: 'system',
+              content: [
+                'You are one member of the LX AI Council.',
+                'Think independently.',
+                'Answer accurately and concretely.',
+                'Never claim code execution, tool use, web verification, or testing unless actually provided.',
+                'Be concise: <= 120 words.',
+                'State uncertainty when necessary.',
+              ].join(' '),
+            },
+            ...messages,
+            {
+              role: 'user',
+              content: 'Give your independent position on the current user question: ' + userPrompt + sharedContext,
+            },
+          ],
+          localSignal,
+          800,
+        );
+
+        const response: CouncilResponse = {
+          model: participant,
+          text: result.text,
+          reasoning: result.reasoning,
+          ok: true,
+        };
+
+        sendEvent('council.thought', {
+          modelId: participant.id,
+          provider: participant.provider,
+          displayName: participant.displayName,
+          status: 'responded',
+          text: result.text.slice(0, 280),
+        });
+
+        return response;
+      } catch (error: any) {
+        const response: CouncilResponse = {
+          model: participant,
+          text: '',
+          reasoning: '',
+          ok: false,
+          error: error?.message || 'model unavailable',
+        };
+
+        sendEvent('council.thought', {
+          modelId: participant.id,
+          provider: participant.provider,
+          displayName: participant.displayName,
+          status: 'failed',
+          error: response.error,
+        });
+
+        return response;
+      }
+    },
+    signal,
+  );
+
+  if (signal.aborted) throw new ProviderError('Council generation cancelled.', 'COUNCIL_CANCELLED', 499);
+
+  const successful = responses.filter((response) => response.ok && response.text.trim());
+  if (!successful.length) {
+    throw new ProviderError('No council member returned a usable answer.', 'COUNCIL_ALL_FAILED', 502);
+  }
+
+  const digest = councilDigest(successful);
+  const jurors = pickCouncilJurors(participants, preferredModelId);
+
+  sendEvent('council.debate.started', {
+    jurorCount: jurors.length,
+    message: 'Một nhóm juror đang phản biện các điểm bất đồng và lỗi logic.',
+  });
+
+  const juryResponses = await runWithConcurrency(
+    jurors,
+    8,
+    async (juror) => {
+      const localSignal = AbortSignal.any([signal, AbortSignal.timeout(18000)]);
+      try {
+        const result = await collectAgentModelText(
+          juror.id,
+          [{
+            role: 'user',
+            content: [
+              'You are a senior juror in the LX AI Council.',
+              'Read the peer opinions below as colleagues in a technical discussion.',
+              'Identify contradictions, weak claims, missing assumptions, and the strongest points.',
+              'Do not claim execution or verification.',
+              'Be concise: <= 180 words.',
+              '',
+              'USER QUESTION:',
+              userPrompt,
+              '',
+              'PANEL DIGEST:',
+              digest.slice(0, 36000),
+              sharedContext,
+            ].join('\n'),
+          }],
+          localSignal,
+          1500,
+        );
+
+        const response: CouncilResponse = {
+          model: juror,
+          text: result.text,
+          reasoning: result.reasoning,
+          ok: true,
+        };
+
+        sendEvent('council.debate', {
+          modelId: juror.id,
+          provider: juror.provider,
+          displayName: juror.displayName,
+          status: 'responded',
+          text: result.text.slice(0, 420),
+        });
+
+        return response;
+      } catch (error: any) {
+        const response: CouncilResponse = {
+          model: juror,
+          text: '',
+          reasoning: '',
+          ok: false,
+          error: error?.message || 'juror unavailable',
+        };
+
+        sendEvent('council.debate', {
+          modelId: juror.id,
+          provider: juror.provider,
+          displayName: juror.displayName,
+          status: 'failed',
+          error: response.error,
+        });
+
+        return response;
+      }
+    },
+    signal,
+  );
+
+  const successfulJurors = juryResponses.filter((response) => response.ok && response.text.trim());
+  sendEvent('council.synthesis.started', {
+    successfulResponses: successful.length,
+    successfulJurors: successfulJurors.length,
+  });
+
+  const finalModel =
+    participants.find((model) => model.id === preferredModelId)
+    || participants.find((model) => model.id === 'groq:openai/gpt-oss-20b')
+    || participants.find((model) => model.provider.toLowerCase() === 'groq')
+    || jurors[0]
+    || participants[0];
+
+  const juryDigest = successfulJurors
+    .map((response, index) =>
+      '[J' + (index + 1) + '] ' + response.model.provider + ' / ' + response.model.displayName + ': ' + response.text.replace(/\s+/g, ' ').trim().slice(0, 850)
+    )
+    .join('\n');
+
+  const finalResult = await collectAgentModelText(
+    finalModel.id,
+    [{
+      role: 'user',
+      content: [
+        'You are the FINAL ARBITER of the LX AI Council.',
+        'Answer the user directly, as one assistant.',
+        'Use the council evidence and juror debate.',
+        'Do not claim consensus unless the evidence supports it.',
+        'When models disagree, choose the better-supported position and state material uncertainty.',
+        'Never invent sources, execution results, tool usage, or tests.',
+        'Do not describe the council process unless useful for the user.',
+        '',
+        'USER QUESTION:',
+        userPrompt,
+        '',
+        'COUNCIL DIGEST:',
+        digest.slice(0, 42000),
+        '',
+        'JUROR DEBATE:',
+        juryDigest.slice(0, 12000),
+        sharedContext,
+      ].join('\n'),
+    }],
+    AbortSignal.any([signal, AbortSignal.timeout(20000)]),
+    6000,
+  );
+
+  sendEvent('council.completed', {
+    participantCount: participants.length,
+    respondedCount: successful.length,
+    failedCount: participants.length - successful.length,
+    jurorCount: jurors.length,
+    finalModelId: finalModel.id,
+  });
+
+  const reasoning = [
+    'LX AI COUNCIL',
+    'Participants: ' + participants.length + ' | Responded: ' + successful.length + ' | Failed/timeout: ' + (participants.length - successful.length),
+    'Debate jurors: ' + successfulJurors.length + '/' + jurors.length,
+    ...successfulJurors.map((response) =>
+      '• ' + response.model.provider + ' / ' + response.model.displayName + ': ' + response.text.replace(/\s+/g, ' ').trim().slice(0, 260)
+    ),
+  ].join('\n');
+
+  let totalChars = finalResult.text.length + finalResult.reasoning.length;
+  for (const response of responses) totalChars += response.text.length + response.reasoning.length;
+  for (const response of juryResponses) totalChars += response.text.length + response.reasoning.length;
+
+  return {
+    answer: finalResult.text,
+    reasoning,
+    totalChars,
+  };
+}
+
 // -------------------------------------------------------------
 // 8. AI Gateway: Streaming with Exact Routing & Race Prevention
 // -------------------------------------------------------------
