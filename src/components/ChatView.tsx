@@ -14,7 +14,7 @@ import {
   ChevronUp,
   Trash2,
 } from 'lucide-react';
-import { Message, Conversation, ModeType, ModelInfo, Attachment } from '../types';
+import { Message, Conversation, ModeType, ModelInfo, Attachment, CouncilActivity } from '../types';
 import { withTurnstile } from '../lib/turnstile';
 
 interface ChatViewProps {
@@ -138,6 +138,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const [expandedReasoningIds, setExpandedReasoningIds] = useState<Record<string, boolean>>({});
+  const [councilLimits, setCouncilLimits] = useState<Record<string, number>>({});
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -225,6 +226,52 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
 
+  const renderCouncilCards = (items: CouncilActivity[], msgId: string, group: 'thought' | 'debate') => {
+    const key = msgId + ':' + group;
+    const initialCount = group === 'thought' ? 3 : 2;
+    const visibleCount = councilLimits[key] ?? initialCount;
+    const visibleItems = items.slice(0, visibleCount);
+    return (
+      <>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {visibleItems.map((item, index) => (
+            <article
+              key={item.id}
+              style={{ animationDelay: (Math.min(index, 8) * 35) + 'ms' }}
+              className="group relative min-w-0 overflow-hidden rounded-[18px] border border-white/[.09] bg-gradient-to-br from-white/[.055] via-white/[.025] to-violet-300/[.025] p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-200/25 hover:shadow-[0_14px_38px_rgba(110,85,255,.10)]"
+            >
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-200/35 to-transparent opacity-70" />
+              <div className="flex min-w-0 items-start gap-2.5">
+                <div className={'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ' + (group === 'debate' ? 'border-cyan-200/15 bg-cyan-200/[.08] text-cyan-100' : 'border-violet-200/15 bg-violet-200/[.08] text-violet-100')}>
+                  {group === 'debate' ? <ShieldCheck className="h-4 w-4" /> : <Brain className="h-4 w-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-semibold tracking-[-.01em] text-slate-100">{item.displayName || item.modelId || 'AI agent'}</p>
+                  <p className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-[.11em] text-slate-500">{item.provider || 'Model'} · {group === 'debate' ? 'Peer critique' : 'Independent view'}</p>
+                </div>
+                <span className={'shrink-0 rounded-full border px-2 py-1 text-[8px] font-bold tracking-[.08em] ' + (item.status === 'failed' ? 'border-rose-300/15 bg-rose-300/[.06] text-rose-200' : 'border-emerald-200/12 bg-emerald-200/[.05] text-emerald-200')}>
+                  {item.status === 'failed' ? 'FAILED' : group === 'debate' ? 'REVIEW' : 'REPLIED'}
+                </span>
+              </div>
+              <p className="mt-3 whitespace-pre-wrap break-words text-[12px] leading-[1.75] text-slate-300">{item.text || (item.status === 'failed' ? 'Provider did not return a response.' : 'Response received.')}</p>
+            </article>
+          ))}
+        </div>
+        {items.length > initialCount && (
+          <button
+            type="button"
+            onClick={() => setCouncilLimits((prev) => ({ ...prev, [key]: visibleCount >= items.length ? initialCount : Math.min(items.length, visibleCount + 6) }))}
+            className="mt-2.5 inline-flex min-h-9 items-center gap-2 rounded-full border border-white/[.09] bg-white/[.025] px-3.5 text-[10px] font-semibold text-slate-400 transition hover:border-violet-200/25 hover:bg-violet-200/[.06] hover:text-white"
+          >
+            {visibleCount >= items.length ? 'Show fewer' : 'Reveal ' + Math.min(6, items.length - visibleCount) + ' more voices'}
+            {visibleCount < items.length && <span className="rounded-full bg-white/[.08] px-1.5 py-0.5 tabular-nums text-slate-300">{items.length - visibleCount} left</span>}
+            <ChevronDown className={'h-3.5 w-3.5 transition-transform ' + (visibleCount >= items.length ? 'rotate-180' : '')} />
+          </button>
+        )}
+      </>
+    );
+  };
+
   const renderMessageContent = (content: string, msgId: string) => {
     const parts = content.split(/(```[\s\S]*?```)/g);
     return parts.map((part, index) => {
@@ -252,6 +299,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
     });
   };
 
+  const latestAssistantId = conversation?.messages.slice().reverse().find((item) => item.role === 'assistant')?.id;
+
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div ref={feedRef} className="chat-feed min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-6 sm:px-5 md:px-8">
@@ -270,14 +319,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <div className="space-y-8">
               {conversation.messages.map((msg) => {
                 const isAssistant = msg.role === 'assistant';
-                const latestAssistantId = [...conversation.messages].reverse().find((item) => item.role === 'assistant')?.id;
                 const canRegenerate = isAssistant && msg.id === latestAssistantId;
                 const reasoningOpen = expandedReasoningIds[msg.id];
+                const councilEvents = msg.councilActivity || [];
+                const councilThoughts = councilEvents.filter((item) => item.kind === 'thought');
+                const councilReviews = councilEvents.filter((item) => item.kind === 'debate');
+                const councilStart = councilEvents.find((item) => item.kind === 'started');
+                const councilCompletion = [...councilEvents].reverse().find((item) => item.kind === 'completed');
+                const councilDebateStart = councilEvents.find((item) => item.kind === 'debate-started');
+                const councilSynthesis = [...councilEvents].reverse().find((item) => item.kind === 'synthesis-started');
+                const successfulThoughts = councilThoughts.filter((item) => item.status === 'responded').length;
+                const successfulReviews = councilReviews.filter((item) => item.status === 'responded').length;
+                const participantCount = councilCompletion?.participantCount || councilStart?.participantCount || councilThoughts.length;
+                const jurorCount = councilCompletion?.jurorCount || councilDebateStart?.jurorCount || councilSynthesis?.jurorCount || 0;
+                const councilStatus = councilCompletion ? 'SYNTHESIS COMPLETE' : isStreaming ? (councilSynthesis ? 'SYNTHESIZING' : councilDebateStart ? 'PEER DEBATE' : 'LIVE COUNCIL') : 'PARTIAL RUN';
 
                 return (
                   <article key={msg.id} className={isAssistant ? 'flex justify-start' : 'flex justify-end'}>
                     <div className={isAssistant ? 'w-full max-w-[48rem]' : 'max-w-[42rem]'}>
-                      {isAssistant && msg.reasoningContent && (
+                      {isAssistant && msg.reasoningContent && councilEvents.length === 0 && (
                         <div className="mb-3 overflow-hidden rounded-2xl border border-violet-200/10 bg-violet-200/[0.03]">
                           <button type="button" onClick={() => toggleReasoning(msg.id)} className="flex h-10 w-full items-center justify-between px-3.5 text-xs text-slate-400 hover:bg-white/4 hover:text-white">
                             <span className="inline-flex items-center gap-2"><Brain className="h-3.5 w-3.5 text-violet-200" /> Reasoning</span>
@@ -285,6 +345,102 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           </button>
                           {reasoningOpen && <div className="max-h-72 overflow-auto border-t border-white/8 px-3.5 py-3 font-mono text-[11px] leading-5 text-slate-500">{msg.reasoningContent}</div>}
                         </div>
+                      )}
+
+                      {isAssistant && councilEvents.length > 0 && (
+                        <section className="relative mb-5 overflow-hidden rounded-[25px] border border-violet-200/[.14] bg-gradient-to-br from-[#171526]/95 via-[#11141b]/95 to-[#0d1a22]/95 p-3.5 shadow-[0_18px_55px_rgba(20,15,50,.22)] sm:p-4.5">
+                          <div className="pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full bg-violet-400/[.10] blur-3xl" />
+                          <div className="pointer-events-none absolute -bottom-14 left-[26%] h-32 w-32 rounded-full bg-cyan-300/[.06] blur-3xl" />
+                          <div className="relative">
+                            <div className="flex items-start gap-3">
+                              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] border border-violet-200/20 bg-gradient-to-br from-violet-200/[.14] to-cyan-200/[.06] shadow-[inset_0_1px_0_rgba(255,255,255,.12)]">
+                                <Sparkles className="h-4.5 w-4.5 text-violet-100" />
+                                {isStreaming && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[#171526] bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,.65)]" />}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] font-bold uppercase tracking-[.19em] text-violet-100">LX AI Council</span>
+                                  <span className="rounded-full border border-white/[.09] bg-white/[.04] px-2 py-1 text-[8px] font-bold tracking-[.09em] text-slate-300">{councilStatus}</span>
+                                </div>
+                                <p className="mt-1 text-[12px] leading-5 text-slate-400">One conversation. Independent minds. Peer review before the answer.</p>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-3 gap-2">
+                              <div className="rounded-2xl border border-white/[.07] bg-white/[.025] px-2.5 py-2.5">
+                                <p className="text-[8px] font-bold uppercase tracking-[.12em] text-slate-500">Models</p>
+                                <p className="mt-1 text-lg font-semibold tracking-tight text-white tabular-nums">{participantCount || '—'}</p>
+                                <p className="text-[9px] text-slate-500">invited</p>
+                              </div>
+                              <div className="rounded-2xl border border-white/[.07] bg-white/[.025] px-2.5 py-2.5">
+                                <p className="text-[8px] font-bold uppercase tracking-[.12em] text-slate-500">Voices</p>
+                                <p className="mt-1 text-lg font-semibold tracking-tight text-white tabular-nums">{successfulThoughts}<span className="text-xs font-medium text-slate-500">/{participantCount || '—'}</span></p>
+                                <p className="text-[9px] text-slate-500">independent</p>
+                              </div>
+                              <div className="rounded-2xl border border-white/[.07] bg-white/[.025] px-2.5 py-2.5">
+                                <p className="text-[8px] font-bold uppercase tracking-[.12em] text-slate-500">Reviews</p>
+                                <p className="mt-1 text-lg font-semibold tracking-tight text-white tabular-nums">{successfulReviews}<span className="text-xs font-medium text-slate-500">/{jurorCount || '—'}</span></p>
+                                <p className="text-[9px] text-slate-500">peer critiques</p>
+                              </div>
+                            </div>
+
+                            <div className="my-4 flex flex-wrap items-center gap-2">
+                              <span className={'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[9px] font-semibold ' + (councilThoughts.length ? 'border-violet-200/15 bg-violet-200/[.06] text-violet-100' : 'border-white/[.08] bg-white/[.025] text-slate-500')}>
+                                <Brain className="h-3 w-3" /> Independent analysis
+                              </span>
+                              <ChevronRight className="h-3 w-3 text-slate-700" />
+                              <span className={'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[9px] font-semibold ' + (councilReviews.length ? 'border-cyan-200/15 bg-cyan-200/[.06] text-cyan-100' : 'border-white/[.08] bg-white/[.025] text-slate-500')}>
+                                <ShieldCheck className="h-3 w-3" /> Adversarial review
+                              </span>
+                              <ChevronRight className="h-3 w-3 text-slate-700" />
+                              <span className={'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[9px] font-semibold ' + (councilCompletion ? 'border-emerald-200/15 bg-emerald-200/[.06] text-emerald-100' : 'border-white/[.08] bg-white/[.025] text-slate-500')}>
+                                <Sparkles className="h-3 w-3" /> Final synthesis
+                              </span>
+                            </div>
+
+                            <div className="border-t border-white/[.07] pt-3.5">
+                              <div className="mb-2.5 flex items-center justify-between gap-2">
+                                <div>
+                                  <h3 className="text-[11px] font-semibold text-white">Independent voices</h3>
+                                  <p className="mt-0.5 text-[10px] text-slate-500">Different providers answer separately before comparing ideas.</p>
+                                </div>
+                                <span className="rounded-full bg-white/[.05] px-2 py-1 text-[9px] text-slate-400">{councilThoughts.length} updates</span>
+                              </div>
+                              {councilThoughts.length > 0 ? renderCouncilCards(councilThoughts, msg.id, 'thought') : (
+                                <div className="flex items-center gap-2 rounded-2xl border border-white/[.07] bg-white/[.025] p-4 text-[11px] text-slate-500">
+                                  <span className="h-2 w-2 animate-pulse rounded-full bg-violet-300" /> Waiting for the first model responses…
+                                </div>
+                              )}
+                            </div>
+
+                            {(councilReviews.length > 0 || councilDebateStart) && (
+                              <div className="mt-4 border-t border-white/[.07] pt-3.5">
+                                <div className="mb-2.5 flex items-center justify-between gap-2">
+                                  <div>
+                                    <h3 className="text-[11px] font-semibold text-white">Peer debate & counterpoints</h3>
+                                    <p className="mt-0.5 text-[10px] text-slate-500">Reviewers challenge contradictions, assumptions, and weak claims.</p>
+                                  </div>
+                                  <span className="rounded-full bg-cyan-200/[.06] px-2 py-1 text-[9px] text-cyan-100">{successfulReviews}/{jurorCount || '—'} reviewed</span>
+                                </div>
+                                {councilReviews.length > 0 ? renderCouncilCards(councilReviews, msg.id, 'debate') : (
+                                  <div className="flex items-center gap-2 rounded-2xl border border-cyan-200/[.08] bg-cyan-200/[.025] p-4 text-[11px] text-slate-500">
+                                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-200" /> {councilDebateStart?.text || 'Waiting for the peer review phase…'}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {(councilCompletion || councilSynthesis) && (
+                              <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-emerald-200/[.12] bg-emerald-200/[.035] p-3">
+                                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+                                <div className="min-w-0">
+                                  <p className="text-[10px] font-semibold text-emerald-100">{councilCompletion ? 'Final arbiter finished synthesis' : 'Final arbiter is synthesizing'}</p>
+                                  <p className="mt-1 break-all text-[10px] leading-5 text-slate-400">{councilCompletion?.finalModelId || 'Combining shared conclusions and opposing views'}{councilCompletion ? ' · ' + (councilCompletion.respondedCount || 0) + '/' + (councilCompletion.participantCount || 0) + ' responses returned' : ''}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </section>
                       )}
 
                       <div className={isAssistant ? 'text-[15px] leading-7 text-slate-100' : 'rounded-[22px] rounded-br-md border border-white/12 bg-white/[.085] px-4 py-3.5 text-[15px] leading-7 text-white shadow-[0_16px_38px_rgba(0,0,0,.22)]'}>
