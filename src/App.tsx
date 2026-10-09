@@ -524,7 +524,7 @@ export default function App() {
               modelId: String(data.modelId || ''),
               provider: String(data.provider || ''),
               displayName: String(data.displayName || data.modelId || 'AI agent'),
-              text: String(data.text || data.error || '').replace(/\\s+/g, ' ').slice(0, 240),
+              text: String(data.text || data.error || '').replace(/\s+/g, ' ').slice(0, 240),
             });
           } else if (currentEvent === 'council.debate.started') {
             appendCouncilActivity({
@@ -540,7 +540,7 @@ export default function App() {
               modelId: String(data.modelId || ''),
               provider: String(data.provider || ''),
               displayName: String(data.displayName || data.modelId || 'Peer reviewer'),
-              text: String(data.text || data.error || '').replace(/\\s+/g, ' ').slice(0, 340),
+              text: String(data.text || data.error || '').replace(/\s+/g, ' ').slice(0, 340),
             });
           } else if (currentEvent === 'council.synthesis.started') {
             appendCouncilActivity({
