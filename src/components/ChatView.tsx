@@ -13,6 +13,8 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  ShieldCheck,
+  ChevronRight,
 } from 'lucide-react';
 import { Message, Conversation, ModeType, ModelInfo, Attachment, CouncilActivity } from '../types';
 import { withTurnstile } from '../lib/turnstile';
