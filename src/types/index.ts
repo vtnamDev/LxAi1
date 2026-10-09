@@ -28,11 +28,28 @@ export interface SearchSource {
   snippet: string;
 }
 
+export interface CouncilActivity {
+  id: string;
+  kind: 'started' | 'thought' | 'debate-started' | 'debate' | 'synthesis-started' | 'completed';
+  status: 'running' | 'responded' | 'failed' | 'complete';
+  provider?: string;
+  displayName?: string;
+  modelId?: string;
+  text?: string;
+  participantCount?: number;
+  respondedCount?: number;
+  failedCount?: number;
+  jurorCount?: number;
+  finalModelId?: string;
+  createdAt: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   reasoningContent?: string;
+  councilActivity?: CouncilActivity[];
   attachments?: Attachment[];
   sources?: SearchSource[];
   tokens?: number;
