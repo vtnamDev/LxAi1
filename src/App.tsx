@@ -13,6 +13,7 @@ import {
   ModeType,
   Attachment,
   UserProfile,
+  CouncilActivity,
 } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -472,6 +473,22 @@ export default function App() {
         }));
       };
 
+      const appendCouncilActivity = (event: Omit<CouncilActivity, 'id' | 'createdAt'>) => {
+        const activity: CouncilActivity = {
+          ...event,
+          id: 'council_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+          createdAt: new Date().toISOString(),
+        };
+        setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
+          ...c,
+          messages: c.messages.map((m) => {
+            if (m.id !== assistantMessageId) return m;
+            const nextActivity = [...(m.councilActivity || []), activity];
+            return { ...m, councilActivity: nextActivity.length > 360 ? nextActivity.slice(-360) : nextActivity };
+          }),
+        }));
+      };
+
       const processSseLine = (line: string) => {
         const trimmed = line.trimEnd();
         if (!trimmed) return;
@@ -494,54 +511,56 @@ export default function App() {
             }));
           } else if (currentEvent === 'council.started') {
             const count = Number(data.participantCount || 0);
-            setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
-              ...c,
-              messages: c.messages.map((m) => m.id === assistantMessageId
-                ? { ...m, reasoningContent: 'LX AI Council started. Inviting ' + count + ' live models…\n' }
-                : m),
-            }));
+            appendCouncilActivity({
+              kind: 'started',
+              status: 'running',
+              participantCount: count,
+              text: 'Inviting live text models to give independent perspectives.',
+            });
           } else if (currentEvent === 'council.thought') {
-            if (data.status === 'responded') {
-              setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
-                ...c,
-                messages: c.messages.map((m) => m.id === assistantMessageId
-                  ? {
-                      ...m,
-                      reasoningContent: ((m.reasoningContent || '').length > 12000
-                        ? m.reasoningContent || ''
-                        : (m.reasoningContent || '') + '• ' + String(data.provider || '') + ' / ' + String(data.displayName || data.modelId || '') + ': ' + String(data.text || '').replace(/\s+/g, ' ').slice(0, 240) + '\n')
-                    }
-                  : m),
-              }));
-            }
+            appendCouncilActivity({
+              kind: 'thought',
+              status: data.status === 'failed' ? 'failed' : 'responded',
+              modelId: String(data.modelId || ''),
+              provider: String(data.provider || ''),
+              displayName: String(data.displayName || data.modelId || 'AI agent'),
+              text: String(data.text || data.error || '').replace(/\\s+/g, ' ').slice(0, 240),
+            });
           } else if (currentEvent === 'council.debate.started') {
-            setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
-              ...c,
-              messages: c.messages.map((m) => m.id === assistantMessageId
-                ? { ...m, reasoningContent: (m.reasoningContent || '') + '\n— Peer debate started —\n' }
-                : m),
-            }));
+            appendCouncilActivity({
+              kind: 'debate-started',
+              status: 'running',
+              jurorCount: Number(data.jurorCount || 0),
+              text: String(data.message || 'Independent agents are now challenging weak claims and contradictions.'),
+            });
           } else if (currentEvent === 'council.debate') {
-            if (data.status === 'responded') {
-              setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
-                ...c,
-                messages: c.messages.map((m) => m.id === assistantMessageId
-                  ? { ...m, reasoningContent: (m.reasoningContent || '').slice(0, 16000) + 'JUROR • ' + String(data.provider || '') + ' / ' + String(data.displayName || data.modelId || '') + ': ' + String(data.text || '').replace(/\s+/g, ' ').slice(0, 360) + '\n' }
-                  : m),
-              }));
-            }
+            appendCouncilActivity({
+              kind: 'debate',
+              status: data.status === 'failed' ? 'failed' : 'responded',
+              modelId: String(data.modelId || ''),
+              provider: String(data.provider || ''),
+              displayName: String(data.displayName || data.modelId || 'Peer reviewer'),
+              text: String(data.text || data.error || '').replace(/\\s+/g, ' ').slice(0, 340),
+            });
+          } else if (currentEvent === 'council.synthesis.started') {
+            appendCouncilActivity({
+              kind: 'synthesis-started',
+              status: 'running',
+              respondedCount: Number(data.successfulResponses || 0),
+              jurorCount: Number(data.successfulJurors || 0),
+              text: 'The final arbiter is combining agreements, disagreements, and peer critiques.',
+            });
           } else if (currentEvent === 'council.completed') {
-            setConversations((prev) => prev.map((c) => c.id !== targetConv!.id ? c : {
-              ...c,
-              messages: c.messages.map((m) => m.id === assistantMessageId
-                ? {
-                    ...m,
-                    reasoningContent: (m.reasoningContent || '') +
-                      '\nCouncil complete: ' + String(data.respondedCount || 0) + '/' + String(data.participantCount || 0) +
-                      ' models responded; final arbiter: ' + String(data.finalModelId || 'unknown') + '.\n'
-                  }
-                : m),
-            }));
+            appendCouncilActivity({
+              kind: 'completed',
+              status: 'complete',
+              participantCount: Number(data.participantCount || 0),
+              respondedCount: Number(data.respondedCount || 0),
+              failedCount: Number(data.failedCount || 0),
+              jurorCount: Number(data.jurorCount || 0),
+              finalModelId: String(data.finalModelId || ''),
+              text: 'Council synthesis finished.',
+            });
           } else if (currentEvent === 'usage.recorded') {
             fetchQuota();
           } else if (currentEvent === 'message.completed') {
